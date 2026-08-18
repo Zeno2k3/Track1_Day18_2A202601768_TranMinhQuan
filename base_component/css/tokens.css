@@ -1,0 +1,104 @@
+/* ============================================================
+   TOKENS — Source of truth cho cả 3 nhánh prototype.
+   Không hardcode màu/spacing trong component. Luôn dùng var().
+   ============================================================ */
+:root {
+  /* --- Color: primitive --- */
+  --indigo-50:  #EEF2FF;
+  --indigo-100: #E0E7FF;
+  --indigo-200: #C7D2FE;
+  --indigo-400: #818CF8;
+  --indigo-600: #4F46E5;
+  --indigo-700: #4338CA;
+  --indigo-950: #1E1B4B;
+  --orange-600: #EA580C;
+  --orange-100: #FFEDD5;
+  --red-600:    #DC2626;
+  --green-600:  #059669;
+  --amber-500:  #D97706;
+  --white:      #FFFFFF;
+
+  /* --- Color: semantic --- */
+  --color-background:   var(--indigo-50);
+  --color-surface:      var(--white);
+  --color-surface-alt:  #F6F7FC;
+  --color-foreground:   var(--indigo-950);
+  --color-muted-fg:     #55527A;
+  --color-border:       var(--indigo-200);
+  --color-border-soft:  #E7EAF6;
+  --color-primary:      var(--indigo-600);
+  --color-primary-hover:var(--indigo-700);
+  --color-on-primary:   var(--white);
+  --color-secondary:    var(--indigo-400);
+  --color-accent:       var(--orange-600);
+  --color-accent-soft:  var(--orange-100);
+  --color-destructive:  var(--red-600);
+  --color-success:      var(--green-600);
+  --color-warning:      var(--amber-500);
+  --color-ring:         var(--indigo-600);
+
+  /* Marker colors — dùng cho highlight/question/note ở cả 3 nhánh */
+  --mark-highlight:  #FDE68A;
+  --mark-question:   #FBCFE8;
+  --mark-note:       #BFDBFE;
+
+  /* --- Spacing (density 5/10 — standard) --- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+
+  /* --- Radius --- */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-full: 999px;
+
+  /* --- Elevation (Soft UI Evolution: bóng mềm nhưng rõ) --- */
+  --shadow-sm: 0 1px 2px rgba(30,27,75,.06), 0 1px 3px rgba(30,27,75,.05);
+  --shadow-md: 0 2px 6px rgba(30,27,75,.06), 0 8px 20px rgba(30,27,75,.07);
+  --shadow-lg: 0 4px 12px rgba(30,27,75,.08), 0 18px 40px rgba(30,27,75,.10);
+
+  /* --- Typography --- */
+  --font-display: 'Crimson Pro', Georgia, 'Times New Roman', serif;
+  --font-ui: 'Atkinson Hyperlegible', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+
+  --text-xs:   12px;
+  --text-sm:   14px;
+  --text-base: 16px;
+  --text-lg:   18px;
+  --text-xl:   22px;
+  --text-2xl:  28px;
+  --text-3xl:  36px;
+  --text-4xl:  46px;
+
+  --leading-tight: 1.25;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.7;
+
+  /* --- Motion (standard 5/10) --- */
+  --dur-fast: 150ms;
+  --dur-base: 220ms;
+  --dur-slow: 320ms;
+  --ease-out: cubic-bezier(.22,.61,.36,1);
+  --ease-in-out: cubic-bezier(.65,0,.35,1);
+
+  /* --- Layout --- */
+  --rail-width: 380px;
+  --topbar-height: 60px;
+  --taskbar-height: 56px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
