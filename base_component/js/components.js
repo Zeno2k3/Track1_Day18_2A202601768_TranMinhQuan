@@ -19,7 +19,7 @@
     empty: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9h6M7 13h10"/>'
   };
 
-  const MARK_LABEL = { highlight: 'Highlight', question: 'Câu hỏi', note: 'Ghi chú' };
+  const MARK_LABEL = { highlight: 'Quan trọng', question: 'Chưa hiểu', note: 'Ghi chú' };
 
   function icon(name, cls) {
     return `<svg class="icon ${cls || ''}" viewBox="0 0 24 24" aria-hidden="true">${ICONS[name] || ''}</svg>`;

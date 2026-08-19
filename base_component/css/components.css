@@ -21,6 +21,13 @@
 .btn--secondary:hover { background: var(--indigo-50); }
 .btn--accent { background: var(--color-accent); }
 .btn--accent:hover { background: #C2410C; }
+/* Nút bắt dấu vết — màu khớp đúng loại note mà nó tạo ra */
+.btn--mark-highlight { background: var(--mark-highlight-line); }
+.btn--mark-highlight:hover { background: #92400E; }
+.btn--mark-question { background: var(--mark-question-line); }
+.btn--mark-question:hover { background: #C2410C; }
+.btn--mark-note { background: var(--mark-note-line); }
+.btn--mark-note:hover { background: var(--color-primary-hover); }
 .btn--ghost { background: transparent; color: var(--color-muted-fg); box-shadow: none; }
 .btn--ghost:hover { background: var(--color-surface-alt); color: var(--color-foreground); }
 .btn--sm { min-height: 36px; padding: 0 var(--space-3); font-size: var(--text-xs); }
@@ -135,8 +142,11 @@
 }
 .player__tick {
   position: absolute; top: -3px; width: 3px; height: 14px;
-  border-radius: 2px; background: var(--color-accent);
+  border-radius: 2px; background: var(--color-secondary);
 }
+.player__tick--highlight { background: var(--mark-highlight-line); }
+.player__tick--question { background: var(--mark-question-line); }
+.player__tick--note { background: var(--mark-note-line); }
 .player__slides { display: flex; gap: var(--space-1); flex: none; }
 .player__dot {
   width: 10px; height: 10px; padding: 0; border: 0; border-radius: var(--radius-full);
@@ -169,10 +179,41 @@
   transition: box-shadow var(--dur-base) var(--ease-out), transform var(--dur-base) var(--ease-out);
 }
 .note:hover { box-shadow: var(--shadow-md); }
-.note--highlight { border-left-color: var(--color-warning); }
-.note--question { border-left-color: var(--color-accent); }
-.note--note { border-left-color: var(--color-primary); }
+.note--highlight { border-left-color: var(--mark-highlight-line); }
+.note--question { border-left-color: var(--mark-question-line); }
+.note--note { border-left-color: var(--mark-note-line); }
 .note__meta { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-xs); color: var(--color-muted-fg); }
+.note__meta { flex-wrap: wrap; }
+.note[data-state="kept"] { border-left-color: var(--color-success); }
+.note[data-state="dropped"] { opacity: .55; }
+.note[data-state="dropped"] .note__text { text-decoration: line-through; }
+
+/* Dẫn chứng: nối mỗi ý AI viết với đoạn gốc trong bài, bấm để tua */
+.evidence { font-size: var(--text-xs); }
+.evidence > summary {
+  cursor: pointer; color: var(--color-muted-fg); font-weight: 700;
+  padding: var(--space-1) 0; list-style-position: inside;
+}
+.evidence > summary:hover { color: var(--color-primary); }
+.evidence__item {
+  display: flex; gap: var(--space-2); width: 100%; text-align: left;
+  padding: var(--space-2); margin-top: var(--space-1);
+  border: 0; border-left: 2px solid var(--color-border);
+  background: var(--color-surface-alt); color: var(--color-muted-fg);
+  border-radius: var(--radius-sm); font-size: var(--text-xs);
+  line-height: var(--leading-relaxed); cursor: pointer;
+}
+.evidence__item:hover { color: var(--color-foreground); border-left-color: var(--color-primary); }
+.evidence__ts { font-family: var(--font-mono); flex: none; }
+
+/* Callout: dùng cho cảnh báo giới hạn của AI */
+.callout {
+  display: flex; align-items: flex-start; gap: var(--space-2);
+  padding: var(--space-3); border-radius: var(--radius-md);
+  font-size: var(--text-xs); line-height: var(--leading-relaxed);
+}
+.callout--warn { background: var(--color-accent-soft); color: #9A3412; }
+.callout--warn .icon { flex: none; }
 .note__text { font-size: var(--text-sm); line-height: var(--leading-relaxed); }
 .note__actions { display: flex; gap: var(--space-2); }
 
