@@ -11,11 +11,16 @@
 (function () {
   const { el, icon, escapeHtml, noteCard, emptyState, skeletonBlock, toast, fmtTime } = window.UI;
 
+  /* Task & outcome dùng chung — nguồn duy nhất ở fixtures.js.
+     Không nhánh nào được sửa hai dòng này, nếu không thì 3 prototype
+     đang trả lời ba đề bài khác nhau và kết quả hết so sánh được. */
+  const JOB = window.FIXTURE.job;
+
   const SECTIONS = [
-    { key: 'key',    label: 'Ý chính',      type: 'highlight' },
-    { key: 'ask',    label: 'Câu hỏi',      type: 'question'  },
-    { key: 'unsure', label: 'Chưa hiểu',    type: 'question'  },
-    { key: 'todo',   label: 'Việc cần làm', type: 'note'      }
+    { key: 'key', label: 'Ý chính', type: 'highlight' },
+    { key: 'ask', label: 'Câu hỏi', type: 'question' },
+    { key: 'unsure', label: 'Chưa hiểu', type: 'question' },
+    { key: 'todo', label: 'Việc cần làm', type: 'note' }
   ];
 
   /* ==========================================================
@@ -24,13 +29,15 @@
             → học viên sửa & xác nhận.
      Kiểm chứng: học viên có tin bản AI tổng hợp là "đủ đúng"
      để thay ghi chú tự tay hay không.
+     Task/outcome: dùng chung JOB — nhánh này đánh vào vế "≤ 3 phút,
+     đúng ≥ 80% ý". Chỉ số riêng đo ở footer: tỉ lệ chấp nhận từng ý.
      ========================================================== */
   window.App.registerBranch({
     id: 'ai-notes',
     label: '1 · AI Notes',
     railTitle: 'AI Notes tự động',
-    task: 'Bắt dấu vết trong lúc học, để AI tổng hợp thành bản ghi chú sau bài rồi duyệt lại',
-    outcome: 'Bản ghi chú hoàn chỉnh trong ≤ 3 phút sau bài, học viên xác nhận ≥ 80% ý mà không viết lại từ đầu',
+    task: JOB.task,
+    outcome: JOB.outcome,
     mount(root, api, footer) {
       const panel = el(`
         <div class="stack">
@@ -42,7 +49,7 @@
         </div>`);
       root.appendChild(panel);
       const body = panel.querySelector('#phaseBody');
-      const review = { kept: 0, edited: 0, dropped: 0, done: false };
+      const review = { done: false };
 
       panel.addEventListener('click', e => {
         const b = e.target.closest('[data-phase]');
@@ -56,12 +63,8 @@
         body.innerHTML = '';
         const v = el(`
           <div class="stack">
-            <p class="field__hint">Bôi đen chữ trên slide hoặc transcript rồi bấm một nút. Ghi chú ngắn là tuỳ chọn.</p>
+            <p class="field__hint">Bôi đen chữ <b>trên slide hoặc transcript</b> rồi bấm một nút. Chọn chữ ở nơi khác sẽ không tính.</p>
             <div class="row" id="qa"></div>
-            <div class="field">
-              <label class="field__label" for="quickNote">Ghi chú ngắn (không bắt buộc)</label>
-              <input class="input" id="quickNote" placeholder="vd: nhớ theo cặp Lasso / Ridge">
-            </div>
             <div class="row row--between">
               <strong style="font-size:var(--text-sm)">Dấu vết đã bắt</strong>
               <span class="badge" id="cnt">0</span>
@@ -71,19 +74,17 @@
         body.appendChild(v);
 
         const acts = [
-          { type: 'highlight', label: 'Quan trọng', icon: 'highlight', cls: '' },
-          { type: 'question',  label: 'Chưa hiểu',  icon: 'question',  cls: 'btn--accent' },
-          { type: 'note',      label: 'Ghi chú',    icon: 'note',      cls: 'btn--secondary' }
+          { type: 'highlight', label: 'Quan trọng', icon: 'highlight', cls: 'btn--mark-highlight' },
+          { type: 'question', label: 'Chưa hiểu', icon: 'question', cls: 'btn--mark-question' },
+          { type: 'note', label: 'Ghi chú', icon: 'note', cls: 'btn--mark-note' }
         ];
         const qa = v.querySelector('#qa');
-        const noteInput = v.querySelector('#quickNote');
         acts.forEach(a => {
           const b = el(`<button class="btn btn--sm ${a.cls}" type="button">${icon(a.icon)}<span>${a.label}</span></button>`);
           b.addEventListener('click', () => {
             const sel = api.getSelectionText();
-            if (!sel) return toast('Hãy bôi đen một đoạn chữ trước');
-            api.addMark({ type: a.type, text: sel, note: noteInput.value.trim() });
-            noteInput.value = '';
+            if (!sel) return toast('Hãy bôi đen một đoạn chữ trên slide hoặc transcript');
+            api.addMark({ type: a.type, text: sel });
             window.getSelection().removeAllRanges();
             toast(`Đã bắt: ${a.label}`);
           });
@@ -107,7 +108,48 @@
         stats();
       }
 
-      /* --- Giai đoạn 2: AI tổng hợp, học viên duyệt từng ý --- */
+      /* --- Giai đoạn 2: AI tổng hợp (Act ở phần dựng nháp),
+             học viên duyệt từng ý rồi mới lưu (Ask) --- */
+      let draft = null;   // bản nháp AI đang mở; null = chưa tổng hợp lần nào
+
+      /* AI đọc dấu vết của user + transcript → dựng nháp có dẫn chứng.
+         Mỗi ý giữ `aiText` gốc để nút "Khôi phục" quay về được. */
+      function buildDraft() {
+        const g = api.fixture.goldenSummary;
+        const marks = api.getMarks();
+        const count = { total: marks.length, highlight: 0, question: 0, note: 0 };
+        marks.forEach(m => { if (count[m.type] != null) count[m.type]++; });
+
+        const fromMarks = marks.filter(m => m.type === 'question').map(m => ({
+          text: m.note || m.text,
+          origin: 'user',
+          sources: [{ t: m.t, slideId: m.slideId, quote: m.text }]
+        }));
+        const groups = [
+          { type: 'highlight', title: 'Quan trọng',   items: g.keyPoints },
+          { type: 'question',  title: 'Chưa hiểu',    items: fromMarks.concat(g.openQuestions) },
+          { type: 'note',      title: 'Việc cần làm', items: g.actionItems }
+        ];
+        const seen = new Set();
+        return {
+          count,
+          groups: groups.map(sec => ({
+            type: sec.type, title: sec.title,
+            items: sec.items.filter(it => !seen.has(it.text) && seen.add(it.text)).map(it => ({
+              aiText: it.text, text: it.text,
+              inferred: !!it.inferred,
+              origin: it.origin || 'ai',
+              sources: it.sources || [],
+              state: 'pending'
+            }))
+          })).filter(sec => sec.items.length)
+        };
+      }
+
+      function allItems() {
+        return draft ? draft.groups.flatMap(sec => sec.items) : [];
+      }
+
       function renderReview() {
         body.innerHTML = '';
         const v = el(`
@@ -118,72 +160,168 @@
           </div>`);
         body.appendChild(v);
         const out = v.querySelector('#out');
-        out.appendChild(emptyState('Chưa tổng hợp', 'Bấm nút trên sau khi buổi học kết thúc.'));
+        const gen = v.querySelector('#gen');
+        const genLabel = gen.querySelector('span');
 
-        v.querySelector('#gen').addEventListener('click', () => {
+        function generate() {
           out.innerHTML = '';
           out.appendChild(skeletonBlock(6));
+          gen.disabled = true;
           setTimeout(() => {
-            out.innerHTML = '';
-            const g = api.fixture.goldenSummary;
-            const marks = api.getMarks();
-            const groups = [
-              { title: 'Ý chính', items: g.keyPoints },
-              { title: 'Chỗ chưa hiểu', items: marks.filter(m => m.type === 'question').map(m => m.note || m.text).concat(g.openQuestions) },
-              { title: 'Việc cần làm', items: g.actionItems }
-            ];
-            groups.forEach(sec => {
-              if (!sec.items.length) return;
-              const box = el(`<div class="stack"><strong style="font-size:var(--text-sm)">${sec.title}</strong></div>`);
-              [...new Set(sec.items)].forEach(text => box.appendChild(reviewItem(text)));
-              out.appendChild(box);
-            });
-            const save = el(`<button class="btn btn--accent btn--block" type="button">${icon('check')}<span>Xác nhận & lưu bản ghi chú</span></button>`);
-            save.addEventListener('click', () => {
-              review.done = true;
-              toast('Đã lưu bản ghi chú — thử hướng 3 để xem có quay lại mở không');
-              stats();
-            });
-            out.appendChild(save);
-            stats();
+            gen.disabled = false;
+            genLabel.textContent = 'Tạo lại bản tóm tắt bằng AI';
+            draft = buildDraft();
+            review.done = false;
+            drawDraft(out);
           }, 900);
-        });
+        }
+        gen.addEventListener('click', generate);
+
+        if (draft) { genLabel.textContent = 'Tạo lại bản tóm tắt bằng AI'; drawDraft(out); }
+        else out.appendChild(emptyState('Chưa tổng hợp', 'Bấm nút trên sau khi buổi học kết thúc.'));
         stats();
       }
 
-      function reviewItem(text) {
-        const item = el(`
-          <div class="note note--note">
-            <p class="note__text">${escapeHtml(text)}</p>
-            <div class="note__actions">
-              <button class="btn btn--ghost btn--sm" data-act="keep">${icon('check')}<span>Đúng</span></button>
-              <button class="btn btn--ghost btn--sm" data-act="edit">${icon('note')}<span>Sửa</span></button>
-              <button class="btn btn--ghost btn--sm" data-act="drop">${icon('trash')}<span>Bỏ</span></button>
-            </div>
-          </div>`);
+      function drawDraft(out) {
+        out.innerHTML = '';
+        const c = draft.count;
+
+        /* Capability — AI nói rõ nó đã đọc những gì */
+        out.appendChild(el(`
+          <p class="field__hint">${icon('sparkle')} AI đã tổng hợp từ <b>${c.total} dấu vết</b> của bạn
+            (${c.highlight} quan trọng · ${c.question} chưa hiểu · ${c.note} ghi chú) cùng transcript buổi học.</p>`));
+
+        /* Limit — nói rõ đây mới là bản nháp, chưa lưu */
+        out.appendChild(el(`
+          <div class="callout callout--warn">${icon('question')}
+            <span>Bản nháp do AI tạo, <b>chưa được lưu</b>. Vui lòng kiểm tra và chỉnh sửa lại theo ý bạn trước khi lưu.</span>
+          </div>`));
+
+        draft.groups.forEach(sec => {
+          const box = el(`<div class="stack"><strong style="font-size:var(--text-sm)">${sec.title}</strong></div>`);
+          const host = el('<div class="stack"></div>');
+          sec.items.forEach(it => host.appendChild(reviewItem(it, sec.type)));
+          box.appendChild(host);
+          const add = el(`<button class="btn btn--ghost btn--sm" type="button">${icon('note')}<span>Thêm ý của bạn</span></button>`);
+          add.addEventListener('click', () => {
+            const it = { aiText: '', text: '', inferred: false, origin: 'user-added', sources: [], state: 'added' };
+            sec.items.push(it);
+            const node = reviewItem(it, sec.type);
+            host.appendChild(node);
+            node.querySelector('[data-act="edit"]').click();
+            stats();
+          });
+          box.appendChild(add);
+          out.appendChild(box);
+        });
+
+        /* Recovery + xác nhận */
+        const bar = el('<div class="row"></div>');
+        const reset = el(`<button class="btn btn--secondary btn--sm" type="button">${icon('prev')}<span>Khôi phục về bản AI vừa dựng</span></button>`);
+        reset.addEventListener('click', () => {
+          draft.groups.forEach(sec => {
+            sec.items = sec.items.filter(it => it.origin !== 'user-added');
+            sec.items.forEach(it => { it.text = it.aiText; it.state = 'pending'; });
+          });
+          review.done = false;
+          drawDraft(out);
+          toast('Đã khôi phục bản nháp gốc của AI');
+        });
+        bar.appendChild(reset);
+        out.appendChild(bar);
+
+        const save = el(`<button class="btn btn--accent btn--block" type="button">${icon('check')}<span>Xác nhận & lưu bản ghi chú</span></button>`);
+        save.addEventListener('click', () => {
+          const kept = allItems().filter(it => it.state !== 'dropped' && it.text.trim());
+          if (!kept.length) return toast('Bản ghi chú đang trống — giữ lại ít nhất một ý');
+          review.done = true;
+          save.disabled = true;
+          save.querySelector('span').textContent = `Đã lưu ${kept.length} ý vào ghi chú của bạn`;
+          toast('Đã lưu bản ghi chú — thử hướng 3 để xem có quay lại mở không');
+          stats();
+        });
+        out.appendChild(save);
+        stats();
+      }
+
+      function reviewItem(it, type) {
+        const item = el(`<div class="note note--${type}"></div>`);
+
+        function paint() {
+          item.dataset.state = it.state;
+          item.innerHTML = '';
+
+          const meta = el('<div class="note__meta"></div>');
+          if (it.origin === 'user') meta.appendChild(el(`<span class="badge badge--muted">Từ dấu vết của bạn</span>`));
+          if (it.origin === 'user-added') meta.appendChild(el(`<span class="badge badge--muted">Bạn tự thêm</span>`));
+          if (it.inferred) meta.appendChild(el(`<span class="badge badge--accent" title="AI tự suy luận, không có câu nào trong bài nói thẳng ý này">${icon('question')}AI suy luận thêm</span>`));
+          if (it.state === 'kept') meta.appendChild(el(`<span class="badge badge--success">Đã xác nhận</span>`));
+          if (it.state === 'edited') meta.appendChild(el(`<span class="badge">Bạn đã sửa</span>`));
+          if (it.state === 'dropped') meta.appendChild(el(`<span class="badge badge--muted">Đã bỏ</span>`));
+          if (meta.children.length) item.appendChild(meta);
+
+          item.appendChild(el(`<p class="note__text">${escapeHtml(it.text || '(ý trống — bấm Sửa để nhập)')}</p>`));
+
+          /* Evidence — nối từng ý với đoạn gốc, bấm để tua tới đúng chỗ */
+          if (it.sources.length) {
+            const ev = el(`<details class="evidence"><summary>Dẫn chứng (${it.sources.length})</summary></details>`);
+            it.sources.forEach(src => {
+              const b = el(`<button class="evidence__item" type="button" data-t="${src.t}">
+                <span class="evidence__ts">${fmtTime(src.t)}</span>
+                <span>“${escapeHtml(src.quote)}”</span></button>`);
+              ev.appendChild(b);
+            });
+            item.appendChild(ev);
+          }
+
+          const acts = el('<div class="note__actions"></div>');
+          if (it.state === 'dropped') {
+            acts.appendChild(el(`<button class="btn btn--ghost btn--sm" data-act="undrop">${icon('prev')}<span>Hoàn tác</span></button>`));
+          } else {
+            acts.appendChild(el(`<button class="btn btn--ghost btn--sm" data-act="keep">${icon('check')}<span>Đúng</span></button>`));
+            acts.appendChild(el(`<button class="btn btn--ghost btn--sm" data-act="edit">${icon('note')}<span>Sửa</span></button>`));
+            acts.appendChild(el(`<button class="btn btn--ghost btn--sm" data-act="drop">${icon('trash')}<span>Bỏ</span></button>`));
+          }
+          item.appendChild(acts);
+        }
+
         item.addEventListener('click', e => {
+          const ev = e.target.closest('.evidence__item');
+          if (ev) { api.seek(Number(ev.dataset.t)); return; }
           const act = e.target.closest('[data-act]')?.dataset.act;
           if (!act) return;
-          if (act === 'keep') { review.kept++; item.style.borderLeftColor = 'var(--color-success)'; }
-          if (act === 'drop') { review.dropped++; item.remove(); }
+          if (act === 'keep')   { it.state = 'kept'; paint(); }
+          if (act === 'drop')   { it.state = 'dropped'; paint(); }
+          if (act === 'undrop') { it.state = it.text === it.aiText ? 'pending' : 'edited'; paint(); }
           if (act === 'edit') {
-            review.edited++;
             const p = item.querySelector('.note__text');
             const ta = el('<textarea class="textarea" aria-label="Sửa nội dung ý"></textarea>');
-            ta.value = p.textContent;
-            ta.addEventListener('blur', () => { p.textContent = ta.value; ta.replaceWith(p); });
+            ta.value = it.text;
+            ta.addEventListener('blur', () => {
+              it.text = ta.value.trim();
+              it.state = it.origin === 'user-added' ? 'added' : (it.text === it.aiText ? 'pending' : 'edited');
+              paint(); stats();
+            });
             p.replaceWith(ta); ta.focus();
+            return;
           }
           stats();
         });
+
+        paint();
         return item;
       }
 
+      /* Số liệu tính lại từ bản nháp hiện tại — tạo lại/khôi phục là về đúng mốc,
+         không cộng dồn qua các lần tổng hợp. */
       function stats() {
-        const t = review.kept + review.edited + review.dropped;
-        const rate = t ? Math.round((review.kept / t) * 100) : 0;
+        const items = allItems();
+        const n = st => items.filter(it => it.state === st).length;
+        const kept = n('kept'), edited = n('edited'), dropped = n('dropped'), added = n('added');
+        const judged = kept + edited + dropped;
+        const rate = judged ? Math.round((kept / judged) * 100) : 0;
         footer.innerHTML = '';
-        footer.appendChild(el(`<p class="field__hint">Đo: ${api.getMarks().length} dấu vết · chấp nhận <b>${rate}%</b> (giữ ${review.kept} · sửa ${review.edited} · bỏ ${review.dropped})${review.done ? ' · <b>đã lưu</b>' : ''}</p>`));
+        footer.appendChild(el(`<p class="field__hint">Đo: ${api.getMarks().length} dấu vết · chấp nhận <b>${rate}%</b> (giữ ${kept} · sửa ${edited} · bỏ ${dropped}${added ? ` · tự thêm ${added}` : ''})${review.done ? ' · <b>đã lưu</b>' : ''}</p>`));
       }
 
       renderCapture();
@@ -196,13 +334,16 @@
      học viên tự gõ trong lúc học.
      Kiểm chứng: chỉ cần cái khung là đủ, hay khâu gõ tay vẫn
      làm phân tán sự tập trung?
+     Task/outcome: dùng chung JOB — nhánh này cũng nhắm vế "≤ 3 phút,
+     đúng ≥ 80%", nhưng trả giá bằng sự tập trung trong lúc học.
+     Chỉ số riêng đo ở footer: số lần dừng bài và số mục điền được.
      ========================================================== */
   window.App.registerBranch({
     id: 'template',
     label: '2 · Template',
     railTitle: 'Mẫu ghi chú có cấu trúc',
-    task: 'Tự điền ghi chú vào khung 4 mục có sẵn ngay trong lúc nghe giảng',
-    outcome: 'Điền được cả 4 mục trước khi bài học kết thúc, không phải dừng hay tua lại',
+    task: JOB.task,
+    outcome: JOB.outcome,
     mount(root, api, footer) {
       const entries = { key: [], ask: [], unsure: [], todo: [] };
       const metrics = { pausesAtStart: 0, firstEntryAt: null, keystrokes: 0 };
@@ -275,13 +416,16 @@
      Có công tắc: lịch cố định (không AI) ↔ AI chọn thời điểm.
      Kiểm chứng: rào cản thật là chất lượng ghi chú (Pain A)
      hay là động lực quay lại ôn (Pain B)?
+     Task/outcome: dùng chung JOB — nhánh này đánh vào vế sau,
+     "đến lúc cần ôn thì mở ra dùng lại được trong dưới 3 phút".
+     Chỉ số riêng đo ở footer: tỉ lệ mở lại ghi chú ở các mốc nhắc.
      ========================================================== */
   window.App.registerBranch({
     id: 'reminder',
     label: '3 · Nhắc ôn',
     railTitle: 'Nhắc ôn tập theo lịch',
-    task: 'Nhận nhắc đúng lúc và mở lại bản ghi chú đã lưu để ôn',
-    outcome: 'Mở lại ghi chú ở ≥ 2/3 mốc nhắc đầu tiên, mỗi lượt ôn dưới 3 phút',
+    task: JOB.task,
+    outcome: JOB.outcome,
     mount(root, api, footer) {
       const FREQUENCIES = {
         intensive: [1, 2, 5],

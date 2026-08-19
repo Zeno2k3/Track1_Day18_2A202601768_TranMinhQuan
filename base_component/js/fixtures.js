@@ -22,6 +22,15 @@ window.FIXTURE = {
     goal: "Hiểu để làm được bài tập cuối tuần và ôn lại trước kỳ kiểm tra"
   },
 
+  /* --- Task & Desired outcome: CHUNG cho cả 3 nhánh ---
+     Đây là việc của HỌC VIÊN, không phải việc của công cụ, nên cả 3 prototype
+     phải nhận đúng một task và một outcome thì mới so sánh được với nhau.
+     Khác nhau giữa 3 nhánh nằm ở CÁCH giải, không nằm ở đề bài. --- */
+  job: {
+    task: "Sau buổi ML 45 phút, có bản ghi chú tin được để làm bài tập cuối tuần và ôn trước kỳ kiểm tra — không phải xem lại cả buổi",
+    outcome: "≤ 3 phút sau bài đã có bản ghi chú học viên thấy đúng ≥ 80% ý; đến lúc cần ôn thì mở ra dùng lại được trong dưới 3 phút"
+  },
+
   /* --- 8 slide, đủ để test cuộn / chuyển / neo ghi chú theo slide --- */
   slides: [
     {
@@ -158,21 +167,74 @@ window.FIXTURE = {
     { id: "m5", type: "highlight", slideId: "s7", t: 2420, text: "Mỗi lần chỉ chỉnh một thứ, ghi lại kết quả trước khi chỉnh tiếp.", note: "" }
   ],
 
-  /* --- Kết quả kỳ vọng: bản ghi chú "chuẩn" để 3 nhánh đối chiếu --- */
+  /* --- Kết quả kỳ vọng: bản ghi chú "chuẩn" để 3 nhánh đối chiếu ---
+     Mỗi ý mang theo DẪN CHỨNG (sources: đoạn gốc + mốc thời gian) và cờ
+     `inferred` = AI tự suy luận thêm, không có câu nào trong bài nói thẳng.
+     Nhánh 1 dùng hai trường này để hiện evidence & uncertainty. --- */
   goldenSummary: {
     keyPoints: [
-      "Overfitting = mô hình bám cả nhiễu của tập train; nhận biết qua khoảng cách train–validation nới rộng.",
-      "Bias cao và variance cao cần hai cách chữa khác nhau; thêm dữ liệu chỉ chữa được variance.",
-      "L2 (Ridge) làm mượt trọng số, L1 (Lasso) đẩy trọng số về 0 và tự chọn đặc trưng; λ là nút vặn.",
-      "Cross-validation k-fold cho phép đo tin cậy; không chuẩn hoá trước khi chia dữ liệu.",
-      "Quy trình chẩn đoán: vẽ learning curve → xác định bias hay variance → chỉnh một thứ mỗi lần."
+      {
+        text: "Overfitting = mô hình bám cả nhiễu của tập train; nhận biết qua khoảng cách train–validation nới rộng.",
+        sources: [
+          { t: 430, slideId: "s2", quote: "Overfitting khó nhận hơn vì trên tập train nhìn rất đẹp. Phải nhìn vào validation mới thấy vấn đề." },
+          { t: 560, slideId: "s2", quote: "Đường validation đi xuống rồi bật lên. Chỗ nó bật lên chính là ranh giới bắt đầu overfit." }
+        ]
+      },
+      {
+        text: "Bias cao và variance cao cần hai cách chữa khác nhau; thêm dữ liệu chỉ chữa được variance.",
+        inferred: true,
+        sources: [
+          { t: 655, slideId: "s3", quote: "Bias cao nghĩa là mình áp đặt giả định quá cứng lên dữ liệu." },
+          { t: 900, slideId: "s3", quote: "Thêm dữ liệu chữa được variance, nhưng không chữa được bias." }
+        ]
+      },
+      {
+        text: "L2 (Ridge) làm mượt trọng số, L1 (Lasso) đẩy trọng số về 0 và tự chọn đặc trưng; λ là nút vặn.",
+        sources: [
+          { t: 1150, slideId: "s4", quote: "L2 phạt bình phương trọng số nên nó kéo tất cả về gần 0 nhưng hiếm khi đúng bằng 0." },
+          { t: 1265, slideId: "s4", quote: "L1 đẩy hẳn một số trọng số về 0. Nên hay dùng L1 khi muốn mô hình tự chọn đặc trưng." },
+          { t: 1360, slideId: "s4", quote: "Lambda là nút vặn. Vặn quá tay thì mọi trọng số về 0 và mình quay lại underfitting." }
+        ]
+      },
+      {
+        text: "Cross-validation k-fold cho phép đo tin cậy; không chuẩn hoá trước khi chia dữ liệu.",
+        sources: [
+          { t: 1580, slideId: "s5", quote: "Chia k phần, luân phiên giữ lại một phần làm validation, chạy k lần rồi lấy trung bình." },
+          { t: 1700, slideId: "s5", quote: "Cạm bẫy kinh điển: chuẩn hoá toàn bộ dữ liệu trước khi chia. Làm vậy là rò rỉ thông tin từ tập test sang." }
+        ]
+      },
+      {
+        text: "Quy trình chẩn đoán: vẽ learning curve → xác định bias hay variance → chỉnh một thứ mỗi lần.",
+        inferred: true,
+        sources: [
+          { t: 2200, slideId: "s7", quote: "Khi mô hình chạy không như ý, đừng chỉnh bừa. Vẽ learning curve trước đã." },
+          { t: 2320, slideId: "s7", quote: "Hai đường sát nhau mà đều cao thì đó là bias. Khoảng cách rộng, train rất thấp thì đó là variance." },
+          { t: 2420, slideId: "s7", quote: "Mỗi lần chỉ chỉnh một thứ, ghi lại kết quả." }
+        ]
+      }
     ],
     openQuestions: [
-      "Vì sao thêm dữ liệu không giảm được bias?",
-      "Thứ tự đúng khi chuẩn hoá dữ liệu trong pipeline cross-validation là gì?"
+      {
+        text: "Vì sao thêm dữ liệu không giảm được bias?",
+        sources: [
+          { t: 900, slideId: "s3", quote: "Thêm dữ liệu chữa được variance, nhưng không chữa được bias. Nhớ giúp thầy chỗ này." }
+        ]
+      },
+      {
+        text: "Thứ tự đúng khi chuẩn hoá dữ liệu trong pipeline cross-validation là gì?",
+        inferred: true,
+        sources: [
+          { t: 1700, slideId: "s5", quote: "Chuẩn hoá toàn bộ dữ liệu trước khi chia là rò rỉ thông tin từ tập test sang." }
+        ]
+      }
     ],
     actionItems: [
-      "Chạy Ridge với λ ∈ {0.01, 0.1, 1, 10}, vẽ validation curve, nộp trước Chủ nhật."
+      {
+        text: "Chạy Ridge với λ ∈ {0.01, 0.1, 1, 10}, vẽ validation curve, nộp trước Chủ nhật.",
+        sources: [
+          { t: 2630, slideId: "s8", quote: "Bài tập: chạy Ridge với bốn giá trị lambda, vẽ validation curve, nộp trước Chủ nhật." }
+        ]
+      }
     ]
   }
 };
