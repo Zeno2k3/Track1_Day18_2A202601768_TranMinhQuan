@@ -283,71 +283,344 @@
     task: 'Nhận nhắc đúng lúc và mở lại bản ghi chú đã lưu để ôn',
     outcome: 'Mở lại ghi chú ở ≥ 2/3 mốc nhắc đầu tiên, mỗi lượt ôn dưới 3 phút',
     mount(root, api, footer) {
-      let useAI = false;
-      const FIXED = [
-        { day: 1, label: 'D+1', hint: 'Lịch cố định: 1 ngày' },
-        { day: 3, label: 'D+3', hint: 'Lịch cố định: 3 ngày' },
-        { day: 7, label: 'D+7', hint: 'Lịch cố định: 1 tuần' }
-      ];
-      const AI_SCHEDULE = [
-        { day: 1, label: 'D+1 · 21:00', hint: 'AI: sau giờ bạn thường học buổi tối' },
-        { day: 4, label: 'D+4 · 07:30', hint: 'AI: giãn ra vì 2 câu "chưa hiểu" đã được giải đáp' },
-        { day: 9, label: 'D+9 · 20:00', hint: 'AI: sát mốc kiểm tra, ưu tiên 3 thẻ khó nhất' }
-      ];
-      let slots = FIXED.map(s => ({ ...s, state: 'pending' }));   // pending | notified | opened | skipped
-      const log = [];
+      const FREQUENCIES = {
+        intensive: [1, 2, 5],
+        standard: [1, 3, 7],
+        light: [2, 7, 14]
+      };
+      const prefs = {
+        notifications: true,
+        frequency: 'standard',
+        customDays: FREQUENCIES.standard.slice(),
+        studyTime: '21:00',
+        selfLevel: 'unknown'
+      };
+      const metrics = {
+        reminders: 0, opened: 0, deferred: 0,
+        remembered: 0, answered: 0, sessions: []
+      };
+      const history = [];
+      let mode = 'fixed';
+      let aiInsight = null;
+      let historySeq = 0;
+      let activeSession = null;
+      let slots = makeSlots(mode);
 
       const panel = el(`
         <div class="stack">
           <div class="card card--pad stack">
             <div class="row row--between">
               <span class="field__label">Cách chọn thời điểm nhắc</span>
+              <span class="badge badge--muted" id="planState">0/3 đã mở</span>
             </div>
             <div class="row" role="tablist" aria-label="Chế độ nhắc">
               <button class="seg" type="button" data-mode="fixed" aria-selected="true">Lịch cố định</button>
               <button class="seg" type="button" data-mode="ai" aria-selected="false">AI chọn thời điểm</button>
             </div>
-            <p class="field__hint" id="modeHint">Mốc cố định 1 / 3 / 7 ngày, giống nhau cho mọi học viên.</p>
+            <p class="field__hint" id="modeHint">Ba mốc 1 / 3 / 7 ngày, giống nhau cho mọi học viên.</p>
+            <label class="row row--between" style="min-height:44px">
+              <span><span class="field__label">Notification chủ động</span><br><span class="field__hint">Hệ thống tự gửi khi đến mốc</span></span>
+              <input id="notifications" type="checkbox" checked aria-label="Bật notification" style="width:22px;height:22px;accent-color:var(--color-primary)">
+            </label>
+            <div class="field">
+              <label class="field__label" for="frequency">Tần suất nhắc</label>
+              <select class="input" id="frequency">
+                <option value="intensive">Dày · 1, 2, 5 ngày</option>
+                <option value="standard" selected>Chuẩn · 1, 3, 7 ngày</option>
+                <option value="light">Thưa · 2, 7, 14 ngày</option>
+              </select>
+            </div>
+            <div class="field">
+              <label class="field__label" for="customDays">Tùy chỉnh 3 mốc (ngày)</label>
+              <input class="input" id="customDays" value="1, 3, 7" inputmode="numeric" aria-describedby="daysHint">
+              <span class="field__hint" id="daysHint">Nhập ba số cách nhau bằng dấu phẩy.</span>
+            </div>
+            <div class="row" style="align-items:flex-end">
+              <div class="field" style="flex:1;min-width:120px">
+                <label class="field__label" for="studyTime">Giờ thường học</label>
+                <select class="input" id="studyTime">
+                  <option value="07:30">07:30 · Buổi sáng</option>
+                  <option value="12:30">12:30 · Buổi trưa</option>
+                  <option value="21:00" selected>21:00 · Buổi tối</option>
+                </select>
+              </div>
+              <div class="field" style="flex:1;min-width:120px">
+                <label class="field__label" for="selfLevel">Tự đánh giá</label>
+                <select class="input" id="selfLevel">
+                  <option value="unknown">Chưa rõ</option>
+                  <option value="hard">Khó nhớ</option>
+                  <option value="medium">Tạm nhớ</option>
+                  <option value="easy">Nhớ tốt</option>
+                </select>
+              </div>
+            </div>
+            <button class="btn btn--secondary btn--block" type="button" id="applySchedule">Áp dụng & tính lại lịch</button>
+          </div>
+          <div id="insight"></div>
+          <div id="notification"></div>
+          <div class="row row--between">
+            <strong style="font-size:var(--text-sm)">Lịch nhắc sắp tới</strong>
+            <span class="field__hint">Mục tiêu: mở ≥ 2/3 mốc</span>
           </div>
           <div class="stack" id="slots"></div>
-          <button class="btn btn--secondary btn--block" type="button" id="advance">Tua tới mốc nhắc tiếp theo</button>
+          <button class="btn btn--secondary btn--block" type="button" id="advance">${icon('next')}<span>Gửi notification thử</span></button>
           <div id="session"></div>
+          <div class="row row--between"><strong style="font-size:var(--text-sm)">Lịch sử ôn tập</strong><span class="badge badge--muted" id="historyCount">0</span></div>
+          <div class="stack" id="history"></div>
         </div>`);
       root.appendChild(panel);
       const slotHost = panel.querySelector('#slots');
       const session = panel.querySelector('#session');
       const modeHint = panel.querySelector('#modeHint');
+      const planState = panel.querySelector('#planState');
+      const advance = panel.querySelector('#advance');
+      const notificationHost = panel.querySelector('#notification');
+      const insightHost = panel.querySelector('#insight');
+      const historyHost = panel.querySelector('#history');
+      const historyCount = panel.querySelector('#historyCount');
+      const notificationsInput = panel.querySelector('#notifications');
+      const frequencyInput = panel.querySelector('#frequency');
+      const customDaysInput = panel.querySelector('#customDays');
+      const studyTimeInput = panel.querySelector('#studyTime');
+      const selfLevelInput = panel.querySelector('#selfLevel');
 
       panel.addEventListener('click', e => {
         const b = e.target.closest('[data-mode]');
         if (!b) return;
-        useAI = b.dataset.mode === 'ai';
+        mode = b.dataset.mode;
         panel.querySelectorAll('[data-mode]').forEach(s => s.setAttribute('aria-selected', String(s === b)));
-        modeHint.textContent = useAI
-          ? 'AI giãn/rút mốc theo số câu chưa hiểu còn tồn và lịch học thực tế của bạn.'
-          : 'Mốc cố định 1 / 3 / 7 ngày, giống nhau cho mọi học viên.';
-        slots = (useAI ? AI_SCHEDULE : FIXED).map(s => ({ ...s, state: 'pending' }));
+        modeHint.textContent = mode === 'ai'
+          ? 'AI phân tích lịch sử ôn, độ khó và giờ học để đề xuất từng mốc.'
+          : `Lịch theo ba mốc bạn chọn: ${prefs.customDays.join(' / ')} ngày.`;
+        slots = makeSlots(mode);
+        activeSession = null;
         session.innerHTML = '';
-        drawSlots(); stats();
+        notificationHost.innerHTML = '';
+        renderAll();
       });
 
-      panel.querySelector('#advance').addEventListener('click', () => {
-        const next = slots.find(s => s.state === 'pending');
-        if (!next) return toast('Hết mốc nhắc trong chuỗi này');
-        next.state = 'notified';
-        drawSlots();
-        toast(`Nhắc ${next.label}: đến giờ ôn lại buổi ${api.fixture.lesson.index}`);
+      advance.addEventListener('click', () => {
+        notifyNext('demo');
       });
+
+      notificationsInput.addEventListener('change', () => {
+        prefs.notifications = notificationsInput.checked;
+        addHistory(prefs.notifications ? 'settings' : 'disabled', null,
+          prefs.notifications ? 'Đã bật notification chủ động' : 'Đã tắt notification');
+        if (!prefs.notifications) notificationHost.innerHTML = '';
+        renderAll();
+      });
+
+      frequencyInput.addEventListener('change', () => {
+        prefs.frequency = frequencyInput.value;
+        prefs.customDays = FREQUENCIES[prefs.frequency].slice();
+        customDaysInput.value = prefs.customDays.join(', ');
+      });
+
+      panel.querySelector('#applySchedule').addEventListener('click', () => {
+        const parsed = [...new Set(customDaysInput.value.split(',').map(v => Number(v.trim())).filter(v => Number.isInteger(v) && v > 0 && v <= 30))].sort((a, b) => a - b);
+        if (parsed.length !== 3) return toast('Hãy nhập đúng 3 mốc từ 1 đến 30 ngày');
+        prefs.customDays = parsed;
+        prefs.studyTime = studyTimeInput.value;
+        prefs.selfLevel = selfLevelInput.value;
+        slots = makeSlots(mode);
+        activeSession = null;
+        session.innerHTML = '';
+        notificationHost.innerHTML = '';
+        addHistory('settings', null, mode === 'ai' ? 'AI đã tính lại lịch từ tín hiệu mới' : `Đã đổi lịch thành ${parsed.join(' / ')} ngày`);
+        modeHint.textContent = mode === 'ai'
+          ? 'AI vừa tính lại lịch từ lịch sử ôn, độ khó và thói quen học.'
+          : `Lịch theo ba mốc bạn chọn: ${parsed.join(' / ')} ngày.`;
+        renderAll();
+        toast('Đã cập nhật lịch nhắc');
+      });
+
+      function makeSlots(scheduleMode) {
+        const proposal = scheduleMode === 'ai' ? buildAIProposal() : {
+          days: prefs.customDays,
+          confidence: null,
+          difficulty: difficultyScore(),
+          evidence: 'Lịch cố định do học viên kiểm soát.'
+        };
+        if (scheduleMode === 'ai') aiInsight = proposal;
+        return proposal.days.map((day, index) => ({
+          id: `${scheduleMode}-${day}-${index}`,
+          day,
+          time: prefs.studyTime,
+          label: day === 1 ? 'Ngày mai' : `Sau ${day} ngày`,
+          hint: scheduleMode === 'ai' ? proposal.reasons[index] : fixedReason(day, index),
+          confidence: proposal.confidence,
+          state: 'pending'
+        }));
+      }
+
+      function buildAIProposal() {
+        const marks = api.getMarks();
+        const recall = recallRate();
+        const difficulty = difficultyScore();
+        const enoughHistory = metrics.sessions.length > 0;
+        let days;
+        if (prefs.selfLevel === 'hard' || (enoughHistory && recall < 60) || difficulty >= 70) days = [1, 2, 5];
+        else if (prefs.selfLevel === 'easy' || (enoughHistory && recall >= 80)) days = [1, 4, 9];
+        else days = prefs.customDays.slice();
+        const confidence = Math.min(94, 58 + Math.min(16, marks.length * 2) + Math.min(18, metrics.sessions.length * 6) + (prefs.selfLevel !== 'unknown' ? 5 : 0));
+        const habit = prefs.studyTime === '21:00' ? 'khung giờ bạn thường học buổi tối' : `thói quen học lúc ${prefs.studyTime}`;
+        return {
+          days,
+          confidence,
+          difficulty,
+          evidence: `${metrics.sessions.length} lượt ôn · ${marks.length} dấu vết · ${questionCount()} câu chưa hiểu · nhớ ${recall}%`,
+          reasons: [
+            `Nhắc sớm vì bài có ${questionCount()} câu chưa hiểu; gửi theo ${habit}.`,
+            enoughHistory ? `Điều chỉnh theo tỷ lệ nhớ ${recall}% và ${metrics.deferred} lần để sau.` : 'Mốc củng cố ban đầu theo đường cong quên; sẽ đổi sau lượt ôn đầu.',
+            difficulty >= 70 ? 'Bài đang được đánh giá khó; giữ mốc ôn gần hơn.' : 'Giãn mốc để kiểm tra khả năng ghi nhớ dài hạn.'
+          ]
+        };
+      }
+
+      function fixedReason(day, index) {
+        if (index === 0) return `Đã đến mốc ${day} ngày — nhắc lại trước khi kiến thức giảm nhanh.`;
+        if (index === 1) return `Mốc ${day} ngày — thời điểm củng cố lần hai theo lịch đã chọn.`;
+        return `Mốc ${day} ngày — kiểm tra khả năng ghi nhớ dài hạn.`;
+      }
+
+      function questionCount() {
+        return api.getMarks().filter(m => m.type === 'question').length;
+      }
+
+      function recallRate() {
+        return metrics.answered ? Math.round((metrics.remembered / metrics.answered) * 100) : 0;
+      }
+
+      function difficultyScore() {
+        const marks = api.getMarks();
+        const questionRatio = marks.length ? questionCount() / marks.length : 0;
+        const recallPenalty = metrics.answered ? 100 - recallRate() : 25;
+        const selfAdjust = { unknown: 0, easy: -18, medium: 0, hard: 22 }[prefs.selfLevel];
+        return Math.max(15, Math.min(95, Math.round(42 + questionRatio * 36 + recallPenalty * .28 + selfAdjust)));
+      }
+
+      function notifyNext(source) {
+        if (!prefs.notifications) return toast('Notification đang tắt — hãy bật lại trong cài đặt');
+        if (slots.some(s => s.state === 'notified')) return toast('Hãy xử lý notification đang chờ trước');
+        const next = slots.find(s => s.state === 'pending');
+        if (!next) return toast('Bạn đã đi hết các mốc trong lịch này');
+        next.state = 'notified';
+        metrics.reminders++;
+        addHistory('notified', next, source === 'auto' ? 'Hệ thống tự động gửi khi đến mốc' : 'Notification thử từ prototype');
+        renderNotification(next);
+        drawSlots(); stats();
+        toast(`Đã đến mốc ${next.day} ngày — mở lại bài ${api.fixture.lesson.title}`);
+      }
+
+      function renderNotification(slot) {
+        notificationHost.innerHTML = '';
+        const confidence = mode === 'ai' ? `<span class="badge badge--success">Độ tối ưu ${slot.confidence}%</span>` : '<span class="badge badge--muted">Lịch do bạn chọn</span>';
+        const notice = el(`
+          <div class="card card--pad stack" role="alert" style="border-color:var(--color-accent)">
+            <div class="row row--between"><span class="badge badge--accent">Notification chủ động</span>${confidence}</div>
+            <strong style="font-size:var(--text-sm)">Đã đến mốc ${slot.day} ngày — thời điểm tốt để ôn lại</strong>
+            <p class="field__hint">${escapeHtml(slot.hint)}</p>
+            <p class="field__hint"><b>Cơ chế:</b> lịch dựa trên Forgetting Curve. Đây là ước tính hỗ trợ ghi nhớ, không bảo đảm bạn sẽ nhớ chính xác.</p>
+            <div class="row" data-notice-actions></div>
+          </div>`);
+        const open = el(`<button class="btn btn--sm" type="button">${icon('play')}<span>Mở ghi chú cũ</span></button>`);
+        const later = el('<button class="btn btn--ghost btn--sm" type="button">Để sau</button>');
+        open.addEventListener('click', () => openReminder(slot));
+        later.addEventListener('click', () => deferReminder(slot));
+        notice.querySelector('[data-notice-actions]').append(open, later);
+        notificationHost.appendChild(notice);
+      }
+
+      function renderInsight() {
+        const insight = mode === 'ai' ? (aiInsight || buildAIProposal()) : {
+          confidence: null,
+          difficulty: difficultyScore(),
+          evidence: 'Lịch cố định do học viên chọn; thuật toán không tự thay đổi mốc.'
+        };
+        const confidence = insight.confidence === null ? 'Không dùng AI' : `Độ tối ưu ${insight.confidence}%`;
+        const points = slots.map((s, i) => {
+          const x = 36 + i * 94;
+          const y = 88 - i * 8;
+          return `<line x1="${x}" y1="20" x2="${x}" y2="96" stroke="var(--color-border)" stroke-dasharray="3 4"/><circle cx="${x}" cy="${y}" r="6" fill="var(--color-primary)"/><text x="${x}" y="114" text-anchor="middle" font-size="10" fill="var(--color-muted-fg)">D+${s.day}</text>`;
+        }).join('');
+        insightHost.innerHTML = '';
+        insightHost.appendChild(el(`
+          <div class="card card--pad stack">
+            <div class="row row--between"><strong style="font-size:var(--text-sm)">Forgetting Curve cá nhân</strong><span class="badge ${mode === 'ai' ? 'badge--success' : 'badge--muted'}">${confidence}</span></div>
+            <svg viewBox="0 0 260 122" role="img" aria-label="Đường cong giảm nhớ và các mốc ôn tập" style="width:100%;height:122px">
+              <path d="M10 22 C56 38 66 92 112 96 C150 98 176 101 250 105" fill="none" stroke="var(--color-accent)" stroke-width="3" stroke-linecap="round"/>
+              <path d="M10 22 C48 35 62 63 78 80 C90 57 96 38 112 30 C144 48 154 70 172 82 C184 57 194 37 206 29 C225 42 236 61 250 77" fill="none" stroke="var(--color-success)" stroke-width="3" stroke-linecap="round"/>
+              ${points}
+            </svg>
+            <p class="field__hint"><b>Evidence:</b> ${escapeHtml(insight.evidence)}</p>
+            <p class="field__hint"><b>Uncertainty:</b> Độ khó ước tính ${insight.difficulty}/100; lịch sẽ được tính lại sau mỗi lượt ôn và tự đánh giá.</p>
+          </div>`));
+      }
+
+      function addHistory(type, slot, detail) {
+        history.unshift({
+          id: ++historySeq,
+          type,
+          slotId: slot?.id || null,
+          slotLabel: slot ? `D+${slot.day} · ${slot.time}` : 'Cài đặt',
+          detail,
+          recovered: false
+        });
+        if (history.length > 10) history.pop();
+        renderHistory();
+      }
+
+      function renderHistory() {
+        historyHost.innerHTML = '';
+        historyCount.textContent = history.length;
+        if (!history.length) return historyHost.appendChild(emptyState('Chưa có lịch sử', 'Notification và lượt ôn sẽ xuất hiện tại đây.'));
+        history.forEach(item => {
+          const labels = { notified: 'Đã gửi', deferred: 'Đã bỏ qua', opened: 'Đã mở', completed: 'Đã ôn xong', settings: 'Đã thay đổi', disabled: 'Đã tắt' };
+          const row = el(`
+            <div class="note note--${item.type === 'deferred' ? 'question' : 'note'}">
+              <div class="note__meta"><span class="badge badge--muted">${labels[item.type] || 'Hoạt động'}</span><span class="spacer"></span><span>${escapeHtml(item.slotLabel)}</span></div>
+              <p class="note__text">${escapeHtml(item.detail)}</p>
+              <div class="note__actions"></div>
+            </div>`);
+          if (item.type === 'deferred' && !item.recovered) {
+            const recover = el('<button class="btn btn--ghost btn--sm" type="button">Mở lại từ lịch sử</button>');
+            recover.addEventListener('click', () => recoverFromHistory(item));
+            row.querySelector('.note__actions').appendChild(recover);
+          } else {
+            row.querySelector('.note__actions').remove();
+          }
+          historyHost.appendChild(row);
+        });
+      }
+
+      function recoverFromHistory(item) {
+        if (activeSession) return toast('Hãy hoàn thành lượt ôn đang mở trước');
+        item.recovered = true;
+        const slot = slots.find(s => s.id === item.slotId) || { id: item.slotId || `history-${item.id}`, day: '?', time: prefs.studyTime, label: 'Từ lịch sử' };
+        if (slot.state) slot.state = 'opened';
+        metrics.opened++;
+        addHistory('opened', slot, 'Đã khôi phục lời nhắc bị bỏ qua từ lịch sử');
+        startSession(slot);
+        drawSlots(); stats();
+      }
+
+      function renderAll() {
+        drawSlots();
+        renderInsight();
+        renderHistory();
+        stats();
+      }
 
       function drawSlots() {
         slotHost.innerHTML = '';
-        slots.forEach(s => {
-          const badge = { pending: 'badge--muted', notified: 'badge--accent', opened: 'badge--success', skipped: 'badge--muted' }[s.state];
-          const label = { pending: 'Chờ', notified: 'Đã nhắc', opened: 'Đã mở lại', skipped: 'Bỏ qua' }[s.state];
+        slots.forEach((s, index) => {
+          const badge = { pending: 'badge--muted', notified: 'badge--accent', deferred: 'badge--accent', opened: 'badge--success' }[s.state];
+          const label = { pending: 'Sắp tới', notified: 'Đến giờ ôn', deferred: 'Đã để sau', opened: 'Đã mở' }[s.state];
           const card = el(`
             <div class="card card--pad stack">
               <div class="row row--between">
-                <strong style="font-size:var(--text-sm)">${escapeHtml(s.label)}</strong>
+                <div class="row"><span class="badge badge--muted">${index + 1}</span><strong style="font-size:var(--text-sm)">${escapeHtml(s.label)} · ${escapeHtml(s.time)}</strong></div>
                 <span class="badge ${badge}">${label}</span>
               </div>
               <p class="field__hint">${escapeHtml(s.hint)}</p>
@@ -356,69 +629,174 @@
           if (s.state === 'notified') {
             const open = el(`<button class="btn btn--sm" type="button">${icon('play')}<span>Mở ôn ngay</span></button>`);
             const skip = el('<button class="btn btn--ghost btn--sm" type="button">Để sau</button>');
-            open.addEventListener('click', () => { s.state = 'opened'; log.push({ slot: s.label, opened: true }); drawSlots(); startSession(); stats(); });
-            skip.addEventListener('click', () => { s.state = 'skipped'; log.push({ slot: s.label, opened: false }); drawSlots(); stats(); toast('Đã bỏ qua mốc này'); });
+            open.addEventListener('click', () => openReminder(s));
+            skip.addEventListener('click', () => deferReminder(s));
             card.querySelector('[data-actions]').append(open, skip);
+          } else if (s.state === 'deferred') {
+            const reopen = el(`<button class="btn btn--secondary btn--sm" type="button">${icon('play')}<span>Mở ôn bây giờ</span></button>`);
+            reopen.addEventListener('click', () => openReminder(s));
+            card.querySelector('[data-actions]').appendChild(reopen);
           }
           slotHost.appendChild(card);
         });
+        const remaining = slots.some(s => s.state === 'pending');
+        advance.disabled = !prefs.notifications || !remaining || slots.some(s => s.state === 'notified');
       }
 
-      /* Lượt ôn 3 phút: lấy đúng dấu vết đã lưu ở hướng 1 hoặc 2 */
-      function startSession() {
-        const marks = api.getMarks();
+      function deferReminder(slot) {
+        slot.state = 'deferred';
+        metrics.deferred++;
+        notificationHost.innerHTML = '';
+        addHistory('deferred', slot, 'Đã để sau; có thể khôi phục từ lịch sử ôn tập');
+        drawSlots(); renderInsight(); stats();
+        toast('Đã để sau — lời nhắc vẫn nằm trong lịch sử');
+      }
+
+      function openReminder(slot) {
+        if (activeSession) return toast('Hãy hoàn thành lượt ôn đang mở trước');
+        slot.state = 'opened';
+        metrics.opened++;
+        history.filter(item => item.slotId === slot.id && item.type === 'deferred').forEach(item => { item.recovered = true; });
+        notificationHost.innerHTML = '';
+        addHistory('opened', slot, 'Đã mở lại bản ghi chú cũ từ notification');
+        drawSlots(); renderInsight(); stats();
+        startSession(slot);
+      }
+
+      /* Lượt ôn tối đa 3 phút, dùng lại đúng dấu vết từ hướng 1 hoặc 2. */
+      function startSession(slot) {
+        const priority = { question: 0, highlight: 1, note: 2 };
+        const marks = api.getMarks().sort((a, b) => {
+          if (mode === 'ai' && a.type !== b.type) return (priority[a.type] ?? 3) - (priority[b.type] ?? 3);
+          return a.t - b.t;
+        });
         session.innerHTML = '';
-        if (!marks.length) return session.appendChild(
-          emptyState('Chưa có gì để ôn', 'Tạo ghi chú ở hướng 1 hoặc 2 trước, rồi quay lại đây.'));
-        let i = 0, right = 0, answered = 0;
+        if (!marks.length) {
+          activeSession = null;
+          return session.appendChild(emptyState('Chưa có gì để ôn', 'Tạo ghi chú ở hướng 1 hoặc 2 trước, rồi quay lại đây.'));
+        }
+        activeSession = { slot, startedAt: Date.now(), index: 0, remembered: 0, answered: 0 };
 
         function draw() {
           session.innerHTML = '';
-          if (i >= marks.length) {
-            session.appendChild(el(`
-              <div class="empty">
-                <span class="empty__icon">${icon('check', 'icon--lg')}</span>
-                <p class="empty__title">Xong lượt ôn</p>
-                <p class="empty__hint">Đúng ${right}/${answered} thẻ. Mốc nhắc tiếp theo đã được xếp lịch.</p>
-              </div>`));
-            stats(); return;
-          }
-          const m = marks[i];
+          const current = activeSession;
+          if (current.index >= marks.length) return finishSession();
+          const m = marks[current.index];
           const card = el(`
             <div class="card card--pad stack">
-              <span class="badge badge--accent">Thẻ ${i + 1}/${marks.length}</span>
+              <div class="row row--between">
+                <span class="badge badge--accent">Thẻ ${current.index + 1}/${marks.length}</span>
+                <span class="field__hint">Mục tiêu dưới 03:00</span>
+              </div>
               <p style="font-size:var(--text-lg);line-height:var(--leading-relaxed)">
                 ${escapeHtml(m.type === 'question' && m.note ? m.note : 'Nhớ lại: ' + m.text.split(' ').slice(0, 7).join(' ') + '…')}
               </p>
-              <div id="ans" hidden><p class="note__text" style="color:var(--color-muted-fg)">${escapeHtml(m.text)}</p></div>
+              <div data-answer hidden><p class="note__text" style="color:var(--color-muted-fg)">${escapeHtml(m.text)}</p></div>
               <div class="row" data-acts></div>
             </div>`);
           const flip = el('<button class="btn btn--block" type="button">Lật thẻ</button>');
           flip.addEventListener('click', () => {
-            card.querySelector('#ans').hidden = false;
+            card.querySelector('[data-answer]').hidden = false;
             flip.remove();
             const yes = el(`<button class="btn btn--sm btn--secondary" type="button">${icon('check')}<span>Nhớ được</span></button>`);
-            const no = el('<button class="btn btn--ghost btn--sm" type="button">Chưa nhớ</button>');
-            yes.addEventListener('click', () => { right++; answered++; i++; draw(); });
-            no.addEventListener('click', () => { answered++; i++; api.seek(m.t); draw(); });
+            const no = el('<button class="btn btn--ghost btn--sm" type="button">Chưa nhớ · xem lại</button>');
+            yes.addEventListener('click', () => answer(true));
+            no.addEventListener('click', () => { api.seek(m.t); answer(false); });
             card.querySelector('[data-acts]').append(yes, no);
           });
           card.appendChild(flip);
           session.appendChild(card);
         }
+
+        function answer(remembered) {
+          if (remembered) activeSession.remembered++;
+          activeSession.answered++;
+          activeSession.index++;
+          draw();
+        }
+
+        function finishSession() {
+          const result = activeSession;
+          const durationSec = Math.max(1, Math.round((Date.now() - result.startedAt) / 1000));
+          metrics.remembered += result.remembered;
+          metrics.answered += result.answered;
+          metrics.sessions.push({ slot: result.slot.id, durationSec });
+          activeSession = null;
+          const withinTarget = durationSec < 180;
+          addHistory('completed', result.slot, `Nhớ ${result.remembered}/${result.answered} thẻ trong ${fmtTime(durationSec)}`);
+          if (mode === 'ai') recalculatePendingAI();
+          const summary = el(`
+            <div class="empty card">
+              <span class="empty__icon">${icon('check', 'icon--lg')}</span>
+              <p class="empty__title">Hoàn thành lượt ôn</p>
+              <p class="empty__hint">Nhớ được ${result.remembered}/${result.answered} thẻ trong ${fmtTime(durationSec)}.</p>
+              <span class="badge ${withinTarget ? 'badge--success' : 'badge--accent'}">${withinTarget ? 'Đạt mục tiêu dưới 3 phút' : 'Vượt mục tiêu 3 phút'}</span>
+              <p class="field__hint">Bạn cảm thấy bài này thế nào?</p>
+              <div class="row" data-levels></div>
+            </div>`);
+          [
+            { value: 'hard', label: 'Khó nhớ' },
+            { value: 'medium', label: 'Tạm nhớ' },
+            { value: 'easy', label: 'Nhớ tốt' }
+          ].forEach(option => {
+            const button = el(`<button class="btn btn--ghost btn--sm" type="button">${option.label}</button>`);
+            button.addEventListener('click', () => {
+              prefs.selfLevel = option.value;
+              selfLevelInput.value = option.value;
+              if (mode === 'ai') recalculatePendingAI();
+              renderAll();
+              toast('AI đã điều chỉnh các mốc còn lại');
+            });
+            summary.querySelector('[data-levels]').appendChild(button);
+          });
+          session.appendChild(summary);
+          renderInsight(); drawSlots(); stats();
+        }
         draw();
       }
 
-      function stats() {
-        const notified = log.length;
-        const opened = log.filter(l => l.opened).length;
-        const rate = notified ? Math.round((opened / notified) * 100) : 0;
-        footer.innerHTML = '';
-        footer.appendChild(el(`<p class="field__hint">Chế độ: <b>${useAI ? 'AI' : 'cố định'}</b> · mở lại <b>${opened}/${notified}</b> mốc (${rate}%) · ${api.getMarks().length} thẻ trong kho</p>`));
+      function recalculatePendingAI() {
+        const proposal = buildAIProposal();
+        aiInsight = proposal;
+        slots = slots.map((slot, index) => {
+          if (slot.state !== 'pending') return slot;
+          const day = proposal.days[index] ?? proposal.days[proposal.days.length - 1];
+          return {
+            ...slot,
+            id: `ai-${day}-${index}`,
+            day,
+            time: prefs.studyTime,
+            label: day === 1 ? 'Ngày mai' : `Sau ${day} ngày`,
+            hint: proposal.reasons[index],
+            confidence: proposal.confidence
+          };
+        });
       }
 
-      drawSlots();
-      stats();
+      function stats() {
+        const rate = metrics.reminders ? Math.round((metrics.opened / metrics.reminders) * 100) : 0;
+        const recall = recallRate();
+        const average = metrics.sessions.length
+          ? Math.round(metrics.sessions.reduce((sum, item) => sum + item.durationSec, 0) / metrics.sessions.length)
+          : 0;
+        const currentOpened = slots.filter(slot => slot.state === 'opened').length;
+        planState.textContent = `${currentOpened}/3 đã mở`;
+        planState.className = `badge ${currentOpened >= 2 ? 'badge--success' : 'badge--muted'}`;
+        footer.innerHTML = '';
+        footer.appendChild(el(`<p class="field__hint">Đo: mở lại <b>${metrics.opened}/${metrics.reminders}</b> mốc (${rate}%) · nhớ <b>${recall}%</b> · lượt ôn TB <b>${fmtTime(average)}</b> · để sau ${metrics.deferred} lần</p>`));
+      }
+
+      api.on('marks:change', () => {
+        if (!panel.isConnected || mode !== 'ai') return;
+        recalculatePendingAI();
+        renderInsight();
+        drawSlots();
+      });
+
+      renderAll();
+      setTimeout(() => {
+        if (panel.isConnected && api.state.activeBranch === 'reminder' && prefs.notifications && metrics.reminders === 0) notifyNext('auto');
+      }, 900);
     }
   });
 })();
