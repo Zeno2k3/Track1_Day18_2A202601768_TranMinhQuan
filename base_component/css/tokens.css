@@ -51,6 +51,9 @@
   --mark-note:              var(--indigo-50);
   --mark-note-border:       var(--indigo-600);
   --mark-note-fg:           var(--indigo-700);
+  --mark-highlight-line:    var(--mark-highlight-border);
+  --mark-question-line:     var(--mark-question-border);
+  --mark-note-line:         var(--mark-note-border);
 
   /* --- Spacing (density 5/10 — standard) --- */
   --space-1: 4px;

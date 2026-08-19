@@ -95,7 +95,7 @@
     dom.dots.querySelectorAll('.player__dot').forEach((d, i) =>
       d.setAttribute('aria-current', String(i === state.slideIndex)));
     dom.ticks.innerHTML = state.marks.map(m =>
-      `<span class="player__tick" style="left:${(m.t / F.lesson.durationSec) * 100}%" title="${escapeHtml(window.UI.MARK_LABEL[m.type])} · ${fmtTime(m.t)}"></span>`).join('');
+      `<span class="player__tick player__tick--${m.type}" style="left:${(m.t / F.lesson.durationSec) * 100}%" title="${escapeHtml(window.UI.MARK_LABEL[m.type])} · ${fmtTime(m.t)}"></span>`).join('');
   }
 
   /* ---------------- Transcript ---------------- */
@@ -130,8 +130,24 @@
     renderPlayer();
     emit('marks:change', { marks: state.marks, removed: id });
   }
+  /* Chỉ vùng bài giảng mới tạo được dấu vết: slide + transcript.
+     Bôi đen ở panel/rail/topbar → coi như không có chọn gì. */
+  function captureZones() {
+    return [dom.slide, dom.transcript].filter(Boolean);
+  }
+  function isInCaptureZone(node) {
+    return captureZones().some(z => z === node || z.contains(node));
+  }
   function getSelectionText() {
-    return (window.getSelection()?.toString() || '').trim();
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed || !sel.rangeCount) return '';
+    const text = (sel.toString() || '').trim();
+    if (!text) return '';
+    for (let i = 0; i < sel.rangeCount; i++) {
+      // cả điểm đầu lẫn điểm cuối phải nằm trong cùng vùng cho phép
+      if (!isInCaptureZone(sel.getRangeAt(i).commonAncestorContainer)) return '';
+    }
+    return text;
   }
 
   /* ---------------- Branch registry ---------------- */
