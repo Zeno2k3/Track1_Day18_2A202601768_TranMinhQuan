@@ -283,71 +283,105 @@
     task: 'Nhận nhắc đúng lúc và mở lại bản ghi chú đã lưu để ôn',
     outcome: 'Mở lại ghi chú ở ≥ 2/3 mốc nhắc đầu tiên, mỗi lượt ôn dưới 3 phút',
     mount(root, api, footer) {
-      let useAI = false;
-      const FIXED = [
-        { day: 1, label: 'D+1', hint: 'Lịch cố định: 1 ngày' },
-        { day: 3, label: 'D+3', hint: 'Lịch cố định: 3 ngày' },
-        { day: 7, label: 'D+7', hint: 'Lịch cố định: 1 tuần' }
-      ];
-      const AI_SCHEDULE = [
-        { day: 1, label: 'D+1 · 21:00', hint: 'AI: sau giờ bạn thường học buổi tối' },
-        { day: 4, label: 'D+4 · 07:30', hint: 'AI: giãn ra vì 2 câu "chưa hiểu" đã được giải đáp' },
-        { day: 9, label: 'D+9 · 20:00', hint: 'AI: sát mốc kiểm tra, ưu tiên 3 thẻ khó nhất' }
-      ];
-      let slots = FIXED.map(s => ({ ...s, state: 'pending' }));   // pending | notified | opened | skipped
-      const log = [];
+      const SCHEDULES = {
+        fixed: [
+          { id: 'f1', day: 1, time: '20:00', label: 'Ngày mai', hint: 'Ôn lại sau 1 ngày' },
+          { id: 'f2', day: 3, time: '20:00', label: 'Sau 3 ngày', hint: 'Củng cố lần hai' },
+          { id: 'f3', day: 7, time: '20:00', label: 'Sau 1 tuần', hint: 'Kiểm tra ghi nhớ dài hạn' }
+        ],
+        ai: [
+          { id: 'a1', day: 1, time: '21:00', label: 'Ngày mai', hint: 'Sau khung giờ bạn thường học buổi tối' },
+          { id: 'a2', day: 4, time: '07:30', label: 'Sau 4 ngày', hint: 'Giãn mốc vì các ý chính đã được ghi khá đầy đủ' },
+          { id: 'a3', day: 9, time: '20:00', label: 'Sau 9 ngày', hint: 'Ưu tiên ôn lại trước mốc kiểm tra tiếp theo' }
+        ]
+      };
+      const metrics = {
+        reminders: 0, opened: 0, deferred: 0,
+        remembered: 0, answered: 0, sessions: []
+      };
+      let mode = 'fixed';
+      let slots = makeSlots(mode);
+      let activeSession = null;
 
       const panel = el(`
         <div class="stack">
           <div class="card card--pad stack">
             <div class="row row--between">
               <span class="field__label">Cách chọn thời điểm nhắc</span>
+              <span class="badge badge--muted" id="planState">0/3 đã mở</span>
             </div>
             <div class="row" role="tablist" aria-label="Chế độ nhắc">
               <button class="seg" type="button" data-mode="fixed" aria-selected="true">Lịch cố định</button>
               <button class="seg" type="button" data-mode="ai" aria-selected="false">AI chọn thời điểm</button>
             </div>
-            <p class="field__hint" id="modeHint">Mốc cố định 1 / 3 / 7 ngày, giống nhau cho mọi học viên.</p>
+            <p class="field__hint" id="modeHint">Ba mốc 1 / 3 / 7 ngày, giống nhau cho mọi học viên.</p>
+          </div>
+          <div class="row row--between">
+            <strong style="font-size:var(--text-sm)">Lịch nhắc sắp tới</strong>
+            <span class="field__hint">Mục tiêu: mở ≥ 2/3 mốc</span>
           </div>
           <div class="stack" id="slots"></div>
-          <button class="btn btn--secondary btn--block" type="button" id="advance">Tua tới mốc nhắc tiếp theo</button>
+          <button class="btn btn--secondary btn--block" type="button" id="advance">${icon('next')}<span>Mô phỏng mốc nhắc tiếp theo</span></button>
           <div id="session"></div>
         </div>`);
       root.appendChild(panel);
       const slotHost = panel.querySelector('#slots');
       const session = panel.querySelector('#session');
       const modeHint = panel.querySelector('#modeHint');
+      const planState = panel.querySelector('#planState');
+      const advance = panel.querySelector('#advance');
 
       panel.addEventListener('click', e => {
         const b = e.target.closest('[data-mode]');
         if (!b) return;
-        useAI = b.dataset.mode === 'ai';
+        mode = b.dataset.mode;
         panel.querySelectorAll('[data-mode]').forEach(s => s.setAttribute('aria-selected', String(s === b)));
-        modeHint.textContent = useAI
-          ? 'AI giãn/rút mốc theo số câu chưa hiểu còn tồn và lịch học thực tế của bạn.'
-          : 'Mốc cố định 1 / 3 / 7 ngày, giống nhau cho mọi học viên.';
-        slots = (useAI ? AI_SCHEDULE : FIXED).map(s => ({ ...s, state: 'pending' }));
+        modeHint.textContent = mode === 'ai'
+          ? `AI ưu tiên ${questionCount()} câu chưa hiểu và chọn giờ phù hợp với thói quen học.`
+          : 'Ba mốc 1 / 3 / 7 ngày, giống nhau cho mọi học viên.';
+        resetMetrics();
+        slots = makeSlots(mode);
+        activeSession = null;
         session.innerHTML = '';
         drawSlots(); stats();
       });
 
-      panel.querySelector('#advance').addEventListener('click', () => {
+      advance.addEventListener('click', () => {
+        if (slots.some(s => s.state === 'notified')) return toast('Hãy xử lý lời nhắc đang chờ trước');
         const next = slots.find(s => s.state === 'pending');
-        if (!next) return toast('Hết mốc nhắc trong chuỗi này');
+        if (!next) return toast('Bạn đã đi hết 3 mốc trong lịch này');
         next.state = 'notified';
-        drawSlots();
-        toast(`Nhắc ${next.label}: đến giờ ôn lại buổi ${api.fixture.lesson.index}`);
+        metrics.reminders++;
+        drawSlots(); stats();
+        toast(`${next.label}, ${next.time}: đến giờ ôn lại buổi ${api.fixture.lesson.index}`);
       });
+
+      function makeSlots(scheduleMode) {
+        return SCHEDULES[scheduleMode].map(s => ({ ...s, state: 'pending' }));
+      }
+
+      function resetMetrics() {
+        metrics.reminders = 0;
+        metrics.opened = 0;
+        metrics.deferred = 0;
+        metrics.remembered = 0;
+        metrics.answered = 0;
+        metrics.sessions = [];
+      }
+
+      function questionCount() {
+        return api.getMarks().filter(m => m.type === 'question').length;
+      }
 
       function drawSlots() {
         slotHost.innerHTML = '';
-        slots.forEach(s => {
-          const badge = { pending: 'badge--muted', notified: 'badge--accent', opened: 'badge--success', skipped: 'badge--muted' }[s.state];
-          const label = { pending: 'Chờ', notified: 'Đã nhắc', opened: 'Đã mở lại', skipped: 'Bỏ qua' }[s.state];
+        slots.forEach((s, index) => {
+          const badge = { pending: 'badge--muted', notified: 'badge--accent', deferred: 'badge--accent', opened: 'badge--success' }[s.state];
+          const label = { pending: 'Sắp tới', notified: 'Đến giờ ôn', deferred: 'Đã để sau', opened: 'Đã mở' }[s.state];
           const card = el(`
             <div class="card card--pad stack">
               <div class="row row--between">
-                <strong style="font-size:var(--text-sm)">${escapeHtml(s.label)}</strong>
+                <div class="row"><span class="badge badge--muted">${index + 1}</span><strong style="font-size:var(--text-sm)">${escapeHtml(s.label)} · ${escapeHtml(s.time)}</strong></div>
                 <span class="badge ${badge}">${label}</span>
               </div>
               <p class="field__hint">${escapeHtml(s.hint)}</p>
@@ -356,65 +390,115 @@
           if (s.state === 'notified') {
             const open = el(`<button class="btn btn--sm" type="button">${icon('play')}<span>Mở ôn ngay</span></button>`);
             const skip = el('<button class="btn btn--ghost btn--sm" type="button">Để sau</button>');
-            open.addEventListener('click', () => { s.state = 'opened'; log.push({ slot: s.label, opened: true }); drawSlots(); startSession(); stats(); });
-            skip.addEventListener('click', () => { s.state = 'skipped'; log.push({ slot: s.label, opened: false }); drawSlots(); stats(); toast('Đã bỏ qua mốc này'); });
+            open.addEventListener('click', () => openReminder(s));
+            skip.addEventListener('click', () => {
+              s.state = 'deferred';
+              metrics.deferred++;
+              drawSlots(); stats();
+              toast('Đã để sau — bạn vẫn có thể mở lại mốc này');
+            });
             card.querySelector('[data-actions]').append(open, skip);
+          } else if (s.state === 'deferred') {
+            const reopen = el(`<button class="btn btn--secondary btn--sm" type="button">${icon('play')}<span>Mở ôn bây giờ</span></button>`);
+            reopen.addEventListener('click', () => openReminder(s));
+            card.querySelector('[data-actions]').appendChild(reopen);
           }
           slotHost.appendChild(card);
         });
+        const remaining = slots.some(s => s.state === 'pending');
+        advance.disabled = !remaining || slots.some(s => s.state === 'notified');
       }
 
-      /* Lượt ôn 3 phút: lấy đúng dấu vết đã lưu ở hướng 1 hoặc 2 */
-      function startSession() {
-        const marks = api.getMarks();
+      function openReminder(slot) {
+        if (activeSession) return toast('Hãy hoàn thành lượt ôn đang mở trước');
+        slot.state = 'opened';
+        metrics.opened++;
+        drawSlots(); stats();
+        startSession(slot);
+      }
+
+      /* Lượt ôn tối đa 3 phút, dùng lại đúng dấu vết từ hướng 1 hoặc 2. */
+      function startSession(slot) {
+        const priority = { question: 0, highlight: 1, note: 2 };
+        const marks = api.getMarks().sort((a, b) => {
+          if (mode === 'ai' && a.type !== b.type) return (priority[a.type] ?? 3) - (priority[b.type] ?? 3);
+          return a.t - b.t;
+        });
         session.innerHTML = '';
-        if (!marks.length) return session.appendChild(
-          emptyState('Chưa có gì để ôn', 'Tạo ghi chú ở hướng 1 hoặc 2 trước, rồi quay lại đây.'));
-        let i = 0, right = 0, answered = 0;
+        if (!marks.length) {
+          activeSession = null;
+          return session.appendChild(emptyState('Chưa có gì để ôn', 'Tạo ghi chú ở hướng 1 hoặc 2 trước, rồi quay lại đây.'));
+        }
+        activeSession = { slot, startedAt: Date.now(), index: 0, remembered: 0, answered: 0 };
 
         function draw() {
           session.innerHTML = '';
-          if (i >= marks.length) {
-            session.appendChild(el(`
-              <div class="empty">
-                <span class="empty__icon">${icon('check', 'icon--lg')}</span>
-                <p class="empty__title">Xong lượt ôn</p>
-                <p class="empty__hint">Đúng ${right}/${answered} thẻ. Mốc nhắc tiếp theo đã được xếp lịch.</p>
-              </div>`));
-            stats(); return;
-          }
-          const m = marks[i];
+          const current = activeSession;
+          if (current.index >= marks.length) return finishSession();
+          const m = marks[current.index];
           const card = el(`
             <div class="card card--pad stack">
-              <span class="badge badge--accent">Thẻ ${i + 1}/${marks.length}</span>
+              <div class="row row--between">
+                <span class="badge badge--accent">Thẻ ${current.index + 1}/${marks.length}</span>
+                <span class="field__hint">Mục tiêu dưới 03:00</span>
+              </div>
               <p style="font-size:var(--text-lg);line-height:var(--leading-relaxed)">
                 ${escapeHtml(m.type === 'question' && m.note ? m.note : 'Nhớ lại: ' + m.text.split(' ').slice(0, 7).join(' ') + '…')}
               </p>
-              <div id="ans" hidden><p class="note__text" style="color:var(--color-muted-fg)">${escapeHtml(m.text)}</p></div>
+              <div data-answer hidden><p class="note__text" style="color:var(--color-muted-fg)">${escapeHtml(m.text)}</p></div>
               <div class="row" data-acts></div>
             </div>`);
           const flip = el('<button class="btn btn--block" type="button">Lật thẻ</button>');
           flip.addEventListener('click', () => {
-            card.querySelector('#ans').hidden = false;
+            card.querySelector('[data-answer]').hidden = false;
             flip.remove();
             const yes = el(`<button class="btn btn--sm btn--secondary" type="button">${icon('check')}<span>Nhớ được</span></button>`);
-            const no = el('<button class="btn btn--ghost btn--sm" type="button">Chưa nhớ</button>');
-            yes.addEventListener('click', () => { right++; answered++; i++; draw(); });
-            no.addEventListener('click', () => { answered++; i++; api.seek(m.t); draw(); });
+            const no = el('<button class="btn btn--ghost btn--sm" type="button">Chưa nhớ · xem lại</button>');
+            yes.addEventListener('click', () => answer(true));
+            no.addEventListener('click', () => { api.seek(m.t); answer(false); });
             card.querySelector('[data-acts]').append(yes, no);
           });
           card.appendChild(flip);
           session.appendChild(card);
         }
+
+        function answer(remembered) {
+          if (remembered) activeSession.remembered++;
+          activeSession.answered++;
+          activeSession.index++;
+          draw();
+        }
+
+        function finishSession() {
+          const result = activeSession;
+          const durationSec = Math.max(1, Math.round((Date.now() - result.startedAt) / 1000));
+          metrics.remembered += result.remembered;
+          metrics.answered += result.answered;
+          metrics.sessions.push({ slot: result.slot.id, durationSec });
+          activeSession = null;
+          const withinTarget = durationSec < 180;
+          session.appendChild(el(`
+            <div class="empty card">
+              <span class="empty__icon">${icon('check', 'icon--lg')}</span>
+              <p class="empty__title">Hoàn thành lượt ôn</p>
+              <p class="empty__hint">Nhớ được ${result.remembered}/${result.answered} thẻ trong ${fmtTime(durationSec)}.</p>
+              <span class="badge ${withinTarget ? 'badge--success' : 'badge--accent'}">${withinTarget ? 'Đạt mục tiêu dưới 3 phút' : 'Vượt mục tiêu 3 phút'}</span>
+            </div>`));
+          stats();
+        }
         draw();
       }
 
       function stats() {
-        const notified = log.length;
-        const opened = log.filter(l => l.opened).length;
-        const rate = notified ? Math.round((opened / notified) * 100) : 0;
+        const rate = metrics.reminders ? Math.round((metrics.opened / metrics.reminders) * 100) : 0;
+        const recall = metrics.answered ? Math.round((metrics.remembered / metrics.answered) * 100) : 0;
+        const average = metrics.sessions.length
+          ? Math.round(metrics.sessions.reduce((sum, item) => sum + item.durationSec, 0) / metrics.sessions.length)
+          : 0;
+        planState.textContent = `${metrics.opened}/3 đã mở`;
+        planState.className = `badge ${metrics.opened >= 2 ? 'badge--success' : 'badge--muted'}`;
         footer.innerHTML = '';
-        footer.appendChild(el(`<p class="field__hint">Chế độ: <b>${useAI ? 'AI' : 'cố định'}</b> · mở lại <b>${opened}/${notified}</b> mốc (${rate}%) · ${api.getMarks().length} thẻ trong kho</p>`));
+        footer.appendChild(el(`<p class="field__hint">Đo: mở lại <b>${metrics.opened}/${metrics.reminders}</b> mốc (${rate}%) · nhớ <b>${recall}%</b> · lượt ôn TB <b>${fmtTime(average)}</b> · để sau ${metrics.deferred} lần</p>`));
       }
 
       drawSlots();
