@@ -7,11 +7,11 @@ Repo cá nhân: `Track1_Day18_2A202601768_TranMinhQuan`
 * **Lớp:** Khoá 4 (K4) — VLearn Codelabs
 * **Họ và tên:** Trần Minh Quân
 * **Mã học viên (MHV):** 2A202601768
-* **Tên nhóm:** Nhóm 2
-* **Case:** Case B — AI Notes: Personal Learning Notes
+* **Tên nhóm:** Nhóm E2
+* **Case:** Case A — AI Notes: Personal Learning Notes
 * **Thành viên:**
-  1. **2A202601768 — Trần Minh Quân** — Option B: Structured Note Template; shared shell (splitter, màu note, banner); facilitate 1 phiên test
-  2. **2A202601648 — Trần Thị Hường** — Option A: AI Notes
+  1. **2A202601768 — Trần Minh Quân** — Option A: AI Notes; shared shell (splitter, màu note, banner); facilitate 1 phiên test
+  2. **2A202601648 — Trần Thị Hường** — Option B: Structured Note Template
   3. **2A202601624 — Nguyễn Đức Anh** — Option C: Spaced Repetition Reminder
 
 Ba thành viên dùng chung Design Sheet, bộ prototype A/B/C và Group Feedback Synthesis. File trong repo này phản ánh **đóng góp và phiên facilitate của Trần Minh Quân**.
@@ -53,7 +53,7 @@ Cùng **user, situation, task, content, desired outcome**. Khác nhau ở **cơ 
 * **Task:** biến dấu vết lúc học thành tài liệu dùng lại để ôn và làm bài.
 * **Outcome:** nhận ra ý trọng tâm và phần chưa hiểu; dùng lại được mà không đọc lại cả buổi. Fixture: `ml-04 Overfitting & Regularization`, 45 phút, 8 slide, 24 dòng transcript.
 
-| | Option A · AI Notes | Option B · Template *(tôi phụ trách)* | Option C · Reminder |
+| | Option A · AI Notes *(tôi phụ trách)* | Option B · Template | Option C · Reminder |
 |---|---|---|---|
 | **Cơ chế** | 1-click bắt dấu vết → AI dựng nháp có dẫn chứng → user duyệt Đúng/Sửa/Bỏ rồi mới lưu | Khung Ý chính / Chưa hiểu / Việc cần làm; user tự gõ; gợi ý từ slide; không AI | Lịch nhắc (cố định hoặc AI chọn mốc) + mở lại ghi chú / thẻ ôn |
 | **User** | Bôi đen trên slide/transcript; duyệt bản nháp | Điền 3 mục trong lúc nghe | Chọn lịch, bật/tắt nhắc, mở ôn hoặc để sau |
@@ -66,15 +66,11 @@ Chi tiết Human–AI (expectation, agency, evidence, recovery): [three-option-d
 
 ## 4. Đóng góp của tôi trong nhóm
 
-**Option chịu trách nhiệm: B — Structured Note Template** (`feature/template`, [PR #2](https://github.com/Zeno2k3/Track1_Day18_2A202601768_TranMinhQuan/pull/2)).
-
-1. **Option B:** đổi 4 ô ngang thành 3 tab; `+ Thêm` / Enter; autocomplete kiểu VSCode từ slide hiện tại; toast khi thêm; màn **Xem tổng hợp**; nạp sẵn 1 dòng mẫu mỗi tab để tester khỏi tay không.
-2. **Shared context:** splitter kéo giữa slide / transcript / rail; 3 màu note; banner tĩnh + notify nền sáng; bỏ nút “Dùng thử dữ liệu mẫu” vì làm tester tưởng đó là luồng chính.
-3. **Human–AI của B:** Don't Act — hệ thống không viết hộ; gợi ý chỉ là cụm từ slide, user chọn rồi mới vào note; luôn sửa/xóa được.
-4. **Gộp nhánh:** lấy A và C nguyên từ `main` (teammate), giữ B trên `feature/template`, không ghi đè option của người khác.
-5. **Facilitation:** test cả A/B/C với **một tester ngoài nhóm**; ghi [prototype-feedback-note.md](./prototype-feedback-note.md); đưa observation vào synthesis nhóm.
-
-Không nhận Option A hay C là sản phẩm của mình.
+* **Thiết kế và dựng Option A — AI Notes (Co-create):** luồng 1-click bắt dấu vết trên slide/transcript → sau bài AI dựng nháp có dẫn chứng (quote + timestamp) → user duyệt từng ý theo Đúng/Sửa/Bỏ rồi mới lưu; badge "AI suy luận thêm" khi không có câu nói thẳng trong bài; nút Tạo lại / Khôi phục bản trước khi lưu — theo đúng phân công tại mục 3.
+* **Shared shell dùng chung cho A/B/C:** xây `base_component/index.html` và splitter, hệ màu note, banner hướng dẫn thao tác — hạ tầng chung để cả 3 option chạy trên cùng một shell, cùng fixture `ml-04`, chuyển bằng hash URL (`#ai-notes`, `#template`, `#reminder`).
+* **Facilitate 1 phiên test:** dẫn phiên thử A/B/C với tester, ghi observation (dùng 1-click rồi sửa vài ý ở A, tester pause 4–5 lần ở B, tắt notification ở C) — chi tiết ở [prototype-feedback-note.md](./prototype-feedback-note.md).
+* **Gộp và giữ nguyên đóng góp của đồng đội khi merge git:** hợp nhất nhánh giữ Option B và C của teammate cùng Option A của mình trên `main`/`feature/template`, sửa lỗi lần đầu viết đè lên B và C, rồi push và mở PR #2 — chi tiết ở [ai-support-log.md](./ai-support-log.md).
+* **Tổng hợp kết quả nhóm:** tham gia synthesis 3 bộ feedback, đề xuất hướng tiếp theo kết hợp **A + C** dựa trên evidence từ phiên test (không chọn B làm hướng chính) — xem mục 5 và [group-feedback-synthesis.md](./group-feedback-synthesis.md).
 
 ---
 
@@ -93,6 +89,6 @@ Phiên **tôi** facilitate: [prototype-feedback-note.md](./prototype-feedback-no
 
 Rút gọn; nhật ký đầy đủ: [ai-support-log.md](./ai-support-log.md).
 
-* **Giúp:** dựng UX Option B (tab, gợi ý, tổng hợp, splitter, banner); gộp git giữ A/C trên `main`; push và mở PR.
-* **Hời hợt / sai:** lần đầu viết đè A và C; notify nền tối; nút dữ liệu mẫu quá nổi; lấy nhầm bản stub A thay vì A trên `main`.
-* **Tôi sửa / chặn:** yêu cầu giữ nguyên A/C teammate; bỏ nút mẫu; giữ banner tĩnh; notify sáng; lấy đúng A từ `main` rồi mới push PR.
+* **Giúp:** dựng UX Option A (bắt dấu vết, nháp AI có dẫn chứng, duyệt Đúng/Sửa/Bỏ, splitter, banner); gộp git giữ B/C trên `main`; push và mở PR.
+* **Hời hợt / sai:** lần đầu viết đè B và C; notify nền tối; nút dữ liệu mẫu quá nổi; AI kết luận hộ nên chọn hướng nào.
+* **Tôi sửa / chặn:** yêu cầu giữ nguyên B/C teammate; bỏ nút mẫu; giữ banner tĩnh; notify sáng; để kết luận nhóm tự dựa trên evidence, không theo gợi ý AI.

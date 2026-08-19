@@ -1,7 +1,7 @@
 # Prototype Feedback Note
 
 **Người nộp / Facilitator:** Trần Minh Quân (2A202601768)  
-**Option tôi chịu trách nhiệm:** B · Template  
+**Option tôi chịu trách nhiệm:** A · AI Notes  
 **Tester:** người ngoài nhóm (không phải thành viên Nhóm 2)  
 **Phạm vi:** tester tự dùng **cả A, B và C** trên cùng fixture `ml-04`, cùng task “có bản ghi chú dùng lại được để ôn / làm bài”.  
 **Độ dài phiên:** khoảng 20 phút (micro-prototype).

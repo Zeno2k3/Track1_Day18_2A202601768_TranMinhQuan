@@ -2,8 +2,9 @@
 
 Bản trong repo (cùng nội dung nhóm dùng Day 18). Board chung: [Google Docs nhóm](https://docs.google.com/document/d/1DrYW34bF2Alx85sDRTRklhkQOZyJwq20dTLwp5t13ZQ/edit?tab=t.8hk9b0yl75jw).
 
-**Case:** B — AI Notes: Personal Learning Notes  
-**Nhóm 2:** Trần Minh Quân (B) · Trần Thị Hường (A) · Nguyễn Đức Anh (C)
+**Case:** A — AI Notes: Personal Learning Notes  
+**Nhóm E2**  
+Trần Minh Quân (A) · Trần Thị Hường (B) · Nguyễn Đức Anh (C)
 
 ---
 
@@ -23,13 +24,13 @@ Khác nhau nằm ở **mechanism** và **chia việc user–AI**, không phải 
 
 ## Ba option
 
-### A · AI Notes (Co-create) — Trần Thị Hường
+### A · AI Notes (Co-create) — Trần Minh Quân
 
 * **Mechanism:** 1-click bắt dấu vết trên slide/transcript → sau bài AI dựng nháp có dẫn chứng → user duyệt từng ý rồi mới lưu.
 * **Pain đánh:** mất công gom highlight/câu hỏi rời sau buổi học.
 * **Trade-off:** nhanh; AI có thể diễn đạt chưa đúng ý cá nhân.
 
-### B · Structured Template (Human-led) — Trần Minh Quân
+### B · Structured Template (Human-led) — Trần Thị Hường
 
 * **Mechanism:** khung cố định Ý chính / Chưa hiểu / Việc cần làm; user tự gõ lúc nghe; gợi ý cụm từ từ slide (không sinh nội dung hộ).
 * **Pain đánh:** ghi chú thiếu cấu trúc ngay từ lúc tạo; kiểm chứng xem **khung** có đủ hay **khâu gõ** vẫn làm phân tán.

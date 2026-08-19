@@ -3,14 +3,13 @@
 Ba option chạy **trên một shell**, cùng fixture `ml-04`. Đổi nhánh ở góc phải trên, hoặc hash URL.
 
 **Repo:** https://github.com/Zeno2k3/Track1_Day18_2A202601768_TranMinhQuan  
-**Nhánh có đủ A+B+C đã gộp:** `feature/template` · [PR #2](https://github.com/Zeno2k3/Track1_Day18_2A202601768_TranMinhQuan/pull/2)
+
 
 ## Cách mở (test-ready)
 
 ```bash
 git clone https://github.com/Zeno2k3/Track1_Day18_2A202601768_TranMinhQuan.git
 cd Track1_Day18_2A202601768_TranMinhQuan
-git checkout feature/template
 cd base_component
 python -m http.server 8018
 ```
