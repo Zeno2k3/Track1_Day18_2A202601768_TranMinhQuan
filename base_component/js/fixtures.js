@@ -22,6 +22,15 @@ window.FIXTURE = {
     goal: "Hiểu để làm được bài tập cuối tuần và ôn lại trước kỳ kiểm tra"
   },
 
+  /* --- Task & Desired outcome: CHUNG cho cả 3 nhánh ---
+     Đây là việc của HỌC VIÊN, không phải việc của công cụ, nên cả 3 prototype
+     phải nhận đúng một task và một outcome thì mới so sánh được với nhau.
+     Khác nhau giữa 3 nhánh nằm ở CÁCH giải, không nằm ở đề bài. --- */
+  job: {
+    task: "Sau buổi ML 45 phút, có bản ghi chú tin được để làm bài tập cuối tuần và ôn trước kỳ kiểm tra — không phải xem lại cả buổi",
+    outcome: "≤ 3 phút sau bài đã có bản ghi chú học viên thấy đúng ≥ 80% ý; đến lúc cần ôn thì mở ra dùng lại được trong dưới 3 phút"
+  },
+
   /* --- 8 slide, đủ để test cuộn / chuyển / neo ghi chú theo slide --- */
   slides: [
     {

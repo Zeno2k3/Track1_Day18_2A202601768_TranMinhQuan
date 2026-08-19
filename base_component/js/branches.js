@@ -11,6 +11,11 @@
 (function () {
   const { el, icon, escapeHtml, noteCard, emptyState, skeletonBlock, toast, fmtTime } = window.UI;
 
+  /* Task & outcome dùng chung — nguồn duy nhất ở fixtures.js.
+     Không nhánh nào được sửa hai dòng này, nếu không thì 3 prototype
+     đang trả lời ba đề bài khác nhau và kết quả hết so sánh được. */
+  const JOB = window.FIXTURE.job;
+
   const SECTIONS = [
     { key: 'key', label: 'Ý chính', type: 'highlight' },
     { key: 'ask', label: 'Câu hỏi', type: 'question' },
@@ -24,13 +29,15 @@
             → học viên sửa & xác nhận.
      Kiểm chứng: học viên có tin bản AI tổng hợp là "đủ đúng"
      để thay ghi chú tự tay hay không.
+     Task/outcome: dùng chung JOB — nhánh này đánh vào vế "≤ 3 phút,
+     đúng ≥ 80% ý". Chỉ số riêng đo ở footer: tỉ lệ chấp nhận từng ý.
      ========================================================== */
   window.App.registerBranch({
     id: 'ai-notes',
     label: '1 · AI Notes',
     railTitle: 'AI Notes tự động',
-    task: 'Bắt dấu vết trong lúc học, để AI tổng hợp thành bản ghi chú sau bài rồi duyệt lại',
-    outcome: 'Bản ghi chú hoàn chỉnh trong ≤ 3 phút sau bài, học viên xác nhận ≥ 80% ý mà không viết lại từ đầu',
+    task: JOB.task,
+    outcome: JOB.outcome,
     mount(root, api, footer) {
       const panel = el(`
         <div class="stack">
@@ -327,13 +334,16 @@
      học viên tự gõ trong lúc học.
      Kiểm chứng: chỉ cần cái khung là đủ, hay khâu gõ tay vẫn
      làm phân tán sự tập trung?
+     Task/outcome: dùng chung JOB — nhánh này cũng nhắm vế "≤ 3 phút,
+     đúng ≥ 80%", nhưng trả giá bằng sự tập trung trong lúc học.
+     Chỉ số riêng đo ở footer: số lần dừng bài và số mục điền được.
      ========================================================== */
   window.App.registerBranch({
     id: 'template',
     label: '2 · Template',
     railTitle: 'Mẫu ghi chú có cấu trúc',
-    task: 'Tự điền ghi chú vào khung 4 mục có sẵn ngay trong lúc nghe giảng',
-    outcome: 'Điền được cả 4 mục trước khi bài học kết thúc, không phải dừng hay tua lại',
+    task: JOB.task,
+    outcome: JOB.outcome,
     mount(root, api, footer) {
       const entries = { key: [], ask: [], unsure: [], todo: [] };
       const metrics = { pausesAtStart: 0, firstEntryAt: null, keystrokes: 0 };
@@ -406,13 +416,16 @@
      Có công tắc: lịch cố định (không AI) ↔ AI chọn thời điểm.
      Kiểm chứng: rào cản thật là chất lượng ghi chú (Pain A)
      hay là động lực quay lại ôn (Pain B)?
+     Task/outcome: dùng chung JOB — nhánh này đánh vào vế sau,
+     "đến lúc cần ôn thì mở ra dùng lại được trong dưới 3 phút".
+     Chỉ số riêng đo ở footer: tỉ lệ mở lại ghi chú ở các mốc nhắc.
      ========================================================== */
   window.App.registerBranch({
     id: 'reminder',
     label: '3 · Nhắc ôn',
     railTitle: 'Nhắc ôn tập theo lịch',
-    task: 'Nhận nhắc đúng lúc và mở lại bản ghi chú đã lưu để ôn',
-    outcome: 'Mở lại ghi chú ở ≥ 2/3 mốc nhắc đầu tiên, mỗi lượt ôn dưới 3 phút',
+    task: JOB.task,
+    outcome: JOB.outcome,
     mount(root, api, footer) {
       let useAI = false;
       const FIXED = [
