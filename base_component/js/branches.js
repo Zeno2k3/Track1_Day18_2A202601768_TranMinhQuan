@@ -329,13 +329,16 @@
   /* ==========================================================
      HƯỚNG 2 — Mẫu ghi chú thủ công có cấu trúc (KHÔNG AI)
      Tab Ý chính / Chưa hiểu / Việc cần làm, học viên tự gõ.
+     Task/outcome: dùng chung JOB — nhánh này nhắm vế "xong bài 3 phút
+     là có ghi chú đúng ý mình", đổi lại tốn tập trung lúc nghe giảng.
+     Chỉ số riêng đo ở footer.
      ========================================================== */
   window.App.registerBranch({
     id: 'template',
     label: '2 · Template',
     railTitle: 'Mẫu ghi chú có cấu trúc',
-    task: 'Tự điền ghi chú vào khung Ý chính / Chưa hiểu / Việc cần làm ngay trong lúc nghe giảng',
-    outcome: 'Điền được cả 3 mục trước khi bài học kết thúc, không phải dừng hay tua lại',
+    task: JOB.task,
+    outcome: JOB.outcome,
     mount(root, api, footer) {
       const entries = { key: [], unsure: [], todo: [] };
       const metrics = { pausesAtStart: 0, firstEntryAt: null, keystrokes: 0 };
@@ -527,13 +530,15 @@
      Có công tắc: lịch cố định (không AI) ↔ AI chọn thời điểm.
      Kiểm chứng: rào cản thật là chất lượng ghi chú (Pain A)
      hay là động lực quay lại ôn (Pain B)?
+     Task/outcome: dùng chung JOB — nhánh này nhắm vế "lúc cần ôn,
+     mở ra dùng được ngay trong 3 phút". Chỉ số riêng đo ở footer.
      ========================================================== */
   window.App.registerBranch({
     id: 'reminder',
     label: '3 · Nhắc ôn',
     railTitle: 'Nhắc ôn tập theo lịch',
-    task: 'Nhận nhắc đúng lúc và mở lại bản ghi chú đã lưu để ôn',
-    outcome: 'Mở lại ghi chú ở ≥ 2/3 mốc nhắc đầu tiên, mỗi lượt ôn dưới 3 phút',
+    task: JOB.task,
+    outcome: JOB.outcome,
     mount(root, api, footer) {
       const FREQUENCIES = {
         intensive: [1, 2, 5],
