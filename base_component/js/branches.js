@@ -1,27 +1,25 @@
 /* ============================================================
    BRANCHES — 3 hướng giải quyết, cùng chạy trên một shell.
-   Mỗi nhánh: id, label, task, outcome, mount(container, api, footer).
-   ĐÂY LÀ FILE DUY NHẤT MỖI NHÁNH ĐƯỢC SỬA khi tách branch git.
-   Bản này là stub chạy được — đủ để demo luồng, chưa phải sản phẩm.
-
-   1 · AI Notes tự động        → có AI
-   2 · Mẫu ghi chú thủ công    → không AI
-   3 · Nhắc ôn tập theo lịch   → AI tuỳ chọn (bật/tắt ngay trong panel)
+   A (ai-notes) = bản trên main (nhánh A của teammate).
+   B (template) = bản feature/template.
+   C (reminder) = bản đã giữ trên feature/template.
    ============================================================ */
 (function () {
-  const { el, icon, escapeHtml, noteCard, emptyState, skeletonBlock, toast, fmtTime } = window.UI;
-
-  /* Task & outcome dùng chung — nguồn duy nhất ở fixtures.js.
-     Không nhánh nào được sửa hai dòng này, nếu không thì 3 prototype
-     đang trả lời ba đề bài khác nhau và kết quả hết so sánh được. */
+  const { el, icon, escapeHtml, noteCard, emptyState, skeletonBlock, toast, notify, fmtTime, guideBanner, suggestField, phrasesFromSlide } = window.UI;
   const JOB = window.FIXTURE.job;
 
-  const SECTIONS = [
-    { key: 'key', label: 'Ý chính', type: 'highlight' },
-    { key: 'ask', label: 'Câu hỏi', type: 'question' },
-    { key: 'unsure', label: 'Chưa hiểu', type: 'question' },
-    { key: 'todo', label: 'Việc cần làm', type: 'note' }
+  const TEMPLATE_TABS = [
+    { key: 'key',    label: 'Ý chính',      type: 'highlight', tab: '1. Ý chính',      badge: 'badge--highlight' },
+    { key: 'unsure', label: 'Chưa hiểu',    type: 'question',  tab: '2. Chưa hiểu',    badge: 'badge--question'  },
+    { key: 'todo',   label: 'Việc cần làm', type: 'note',      tab: '3. Việc cần làm', badge: 'badge--note'      }
   ];
+
+  function slidePhrases(api) {
+    const slide = api.currentSlide();
+    const fromSlide = phrasesFromSlide(slide);
+    const extra = api.fixture.suggestions || [];
+    return [...new Set([...fromSlide, ...extra])];
+  }
 
   /* ==========================================================
      HƯỚNG 1 — AI Notes tự động  (giải pháp hiện tại)
@@ -330,83 +328,196 @@
 
   /* ==========================================================
      HƯỚNG 2 — Mẫu ghi chú thủ công có cấu trúc (KHÔNG AI)
-     Khung cố định Ý chính / Câu hỏi / Chưa hiểu / Việc cần làm,
-     học viên tự gõ trong lúc học.
-     Kiểm chứng: chỉ cần cái khung là đủ, hay khâu gõ tay vẫn
-     làm phân tán sự tập trung?
-     Task/outcome: dùng chung JOB — nhánh này cũng nhắm vế "≤ 3 phút,
-     đúng ≥ 80%", nhưng trả giá bằng sự tập trung trong lúc học.
-     Chỉ số riêng đo ở footer: số lần dừng bài và số mục điền được.
+     Tab Ý chính / Chưa hiểu / Việc cần làm, học viên tự gõ.
      ========================================================== */
   window.App.registerBranch({
     id: 'template',
     label: '2 · Template',
     railTitle: 'Mẫu ghi chú có cấu trúc',
-    task: JOB.task,
-    outcome: JOB.outcome,
+    task: 'Tự điền ghi chú vào khung Ý chính / Chưa hiểu / Việc cần làm ngay trong lúc nghe giảng',
+    outcome: 'Điền được cả 3 mục trước khi bài học kết thúc, không phải dừng hay tua lại',
     mount(root, api, footer) {
-      const entries = { key: [], ask: [], unsure: [], todo: [] };
+      const entries = { key: [], unsure: [], todo: [] };
       const metrics = { pausesAtStart: 0, firstEntryAt: null, keystrokes: 0 };
+      let activeKey = 'key';
+      let view = 'edit';
 
-      const panel = el(`
-        <div class="stack">
-          <p class="field__hint">Không có AI. Gõ vào đúng mục — mỗi dòng Enter là một ý. Mốc thời gian được tự gắn theo bài giảng.</p>
-          <div class="stack" id="sections"></div>
-        </div>`);
-      root.appendChild(panel);
-      const host = panel.querySelector('#sections');
+      const wrap = el('<div class="stack" id="tplRoot"></div>');
+      root.appendChild(wrap);
 
-      SECTIONS.forEach(sec => {
-        const block = el(`
-          <div class="card card--pad stack">
-            <div class="row row--between">
-              <label class="field__label" for="in-${sec.key}">${sec.label}</label>
-              <span class="badge badge--muted" id="c-${sec.key}">0</span>
-            </div>
-            <input class="input" id="in-${sec.key}" placeholder="Gõ rồi Enter để thêm dòng…">
-            <div class="stack" id="l-${sec.key}"></div>
+      function addEntry(tab, text) {
+        const t = api.state.timeSec;
+        const slideId = api.currentSlide().id;
+        if (metrics.firstEntryAt === null) metrics.firstEntryAt = t;
+        entries[tab.key].push({ text, t, slideId });
+        api.addMark({ type: tab.type, text, note: tab.label, t, slideId });
+        const filled = TEMPLATE_TABS.filter(s => entries[s.key].length).length;
+        notify(
+          `Đã thêm vào ${tab.label}`,
+          filled >= 3
+            ? 'Đủ 3 mục rồi. Bấm «Xem tổng hợp bản ghi chú» ở cuối panel.'
+            : 'Có thể đổi tab sang mục khác, hoặc gõ tiếp rồi Enter. Khi xong bấm Xem tổng hợp.',
+          { variant: 'success', ms: 5500 }
+        );
+      }
+
+      function loadSamples(opts = {}) {
+        const pack = api.fixture.samplePack || [];
+        const existingIds = new Set(api.getMarks().map(m => m.id));
+        let n = 0;
+        pack.forEach(item => {
+          const tab = TEMPLATE_TABS.find(t => t.type === item.type);
+          if (!tab) return;
+          if (entries[tab.key].some(e => e.text === item.text)) return;
+          if (metrics.firstEntryAt === null) metrics.firstEntryAt = item.t;
+          entries[tab.key].push({ text: item.text, t: item.t, slideId: item.slideId });
+          if (!existingIds.has(item.id)) {
+            api.addMark({ ...item, note: tab.label });
+            existingIds.add(item.id);
+          }
+          n++;
+        });
+        if (!opts.silent) {
+          notify(
+            n ? `Đã nạp ${n} ghi chú mẫu` : 'Dữ liệu mẫu đã có',
+            'Mỗi tab đã có sẵn 1 dòng. Gõ thêm hoặc bấm Xem tổng hợp.',
+            { variant: 'success' }
+          );
+        }
+        render();
+      }
+
+      function render() {
+        wrap.innerHTML = '';
+        view === 'summary' ? renderSummary() : renderEditor();
+        stats();
+      }
+
+      function renderEditor() {
+        const active = TEMPLATE_TABS.find(t => t.key === activeKey) || TEMPLATE_TABS[0];
+        const panel = el(`
+          <div class="stack">
+            <div id="guideSlot"></div>
+            <div class="seg-bar" role="tablist" aria-label="Mục ghi chú"></div>
+            <div class="card card--pad tab-panel" id="tabPanel"></div>
+            <button class="btn btn--block" type="button" id="toSummary">${icon('list')}<span>📋 Xem tổng hợp bản ghi chú</span></button>
           </div>`);
-        const input = block.querySelector('input');
-        const list = block.querySelector(`#l-${sec.key}`);
-        const count = block.querySelector(`#c-${sec.key}`);
+        wrap.appendChild(panel);
+        panel.querySelector('#guideSlot').appendChild(guideBanner(
+          '📝',
+          '**Hướng dẫn:** Nhập ý chính hoặc câu hỏi vào ô bên dưới. Bấm **+ Thêm** hoặc **Enter**. Khi hoàn thành, bấm \'Xem tổng hợp\'.'
+        ));
 
+        const bar = panel.querySelector('[role="tablist"]');
+        TEMPLATE_TABS.forEach(tab => {
+          const b = el(`<button class="seg" type="button" role="tab" data-tab="${tab.key}" aria-selected="${tab.key === activeKey}">${tab.tab} <span class="badge ${tab.badge}">${entries[tab.key].length}</span></button>`);
+          b.addEventListener('click', () => {
+            if (tab.key === activeKey) return;
+            activeKey = tab.key;
+            notify(`Đang ở mục ${tab.label}`, 'Gõ vào ô (thử chữ M để hiện gợi ý từ slide), rồi Enter hoặc + Thêm.');
+            render();
+          });
+          bar.appendChild(b);
+        });
+
+        const host = panel.querySelector('#tabPanel');
+        host.appendChild(el(`
+          <div class="row row--between">
+            <label class="field__label" for="in-${active.key}">${active.label}</label>
+            <span class="badge ${active.badge}" id="c-${active.key}">${entries[active.key].length}</span>
+          </div>`));
+        const input = el(`<input class="input input--lg" id="in-${active.key}" placeholder="Gõ chữ cái đầu, ví dụ M → gợi ý câu trên slide…" autocomplete="off">`);
+        const addBtn = el(`<button class="btn btn--${active.type} btn--block" type="button">${icon('plus')}<span>+ Thêm vào Note</span></button>`);
+        const list = el(`<div class="stack" id="l-${active.key}"></div>`);
+        const wrapped = suggestField(input, () => slidePhrases(api));
+
+        function commit() {
+          metrics.keystrokes++;
+          const val = input.value.trim();
+          if (!val) return;
+          addEntry(active, val);
+          input.value = '';
+          render();
+        }
         input.addEventListener('keydown', e => {
           metrics.keystrokes++;
           if (e.key !== 'Enter') return;
-          const val = input.value.trim();
-          if (!val) return;
-          if (metrics.firstEntryAt === null) metrics.firstEntryAt = api.state.timeSec;
-          const entry = { text: val, t: api.state.timeSec, slideId: api.currentSlide().id };
-          entries[sec.key].push(entry);
-          input.value = '';
-          drawList();
-          // đồng bộ sang marks chung để hướng 3 dùng lại được
-          api.addMark({ type: sec.type, text: val, note: sec.label });
-          stats();
+          e.preventDefault();
+          commit();
         });
+        addBtn.addEventListener('click', commit);
 
-        function drawList() {
-          count.textContent = entries[sec.key].length;
-          list.innerHTML = entries[sec.key].map((en, i) => `
-            <div class="note note--${sec.type}">
-              <div class="note__meta"><span>${fmtTime(en.t)}</span><span class="spacer"></span>
-                <span class="badge badge--muted">${escapeHtml(en.slideId)}</span></div>
-              <p class="note__text">${escapeHtml(en.text)}</p>
-            </div>`).join('');
+        host.append(wrapped, addBtn, list);
+        if (!entries[active.key].length) {
+          list.appendChild(emptyState(`Chưa có ${active.label.toLowerCase()}`, 'Gõ vào ô trên hoặc nạp dữ liệu mẫu.'));
+        } else {
+          entries[active.key].forEach(en => {
+            list.appendChild(noteCard({
+              type: active.type,
+              text: en.text,
+              t: en.t,
+              slideId: en.slideId
+            }, { onSeek: mk => api.seek(mk.t) }));
+          });
         }
-        drawList();
-        host.appendChild(block);
-      });
 
-      // Đo cái mà hướng này hay hỏng: học viên phải dừng bài để gõ kịp.
+        panel.querySelector('#toSummary').addEventListener('click', () => {
+          view = 'summary';
+          notify('Tổng hợp ghi chú', 'Đây là bảng 3 mục bạn đã nhập. Bấm Quay lại nếu muốn thêm.');
+          render();
+        });
+      }
+
+      function renderSummary() {
+        const panel = el(`
+          <div class="stack">
+            <div class="row row--between">
+              <strong style="font-size:var(--text-sm)">Tổng hợp bản ghi chú</strong>
+              <button class="btn btn--ghost btn--sm" type="button" id="backEdit">← Quay lại</button>
+            </div>
+            <div class="stack" id="sumBody"></div>
+          </div>`);
+        wrap.appendChild(panel);
+        panel.querySelector('#backEdit').addEventListener('click', () => {
+          view = 'edit';
+          notify('Quay lại viết note', 'Chọn tab, gõ hoặc chọn gợi ý, rồi + Thêm.');
+          render();
+        });
+        const body = panel.querySelector('#sumBody');
+        const icons = { key: '📌', unsure: '❓', todo: '🎯' };
+        TEMPLATE_TABS.forEach(tab => {
+          const items = entries[tab.key];
+          const box = el(`
+            <section class="summary-section summary-section--${tab.type}">
+              <div class="summary-section__head">
+                <span class="summary-section__icon" aria-hidden="true">${icons[tab.key]}</span>
+                <h3 class="summary-section__title">${tab.label}</h3>
+                <span class="badge ${tab.badge}">${items.length}</span>
+              </div>
+              <div class="stack" data-items></div>
+            </section>`);
+          const host = box.querySelector('[data-items]');
+          if (!items.length) {
+            host.appendChild(emptyState(`Chưa có ${tab.label.toLowerCase()}`, 'Quay lại để thêm mục này.'));
+          } else {
+            items.forEach(en => host.appendChild(noteCard({
+              type: tab.type, text: en.text, t: en.t, slideId: en.slideId
+            }, { onSeek: mk => api.seek(mk.t) })));
+          }
+          body.appendChild(box);
+        });
+      }
+
       api.on('play:change', ({ playing }) => { if (!playing) { metrics.pausesAtStart++; stats(); } });
 
       function stats() {
-        const filled = SECTIONS.filter(s => entries[s.key].length).length;
+        const filled = TEMPLATE_TABS.filter(s => entries[s.key].length).length;
         footer.innerHTML = '';
-        footer.appendChild(el(`<p class="field__hint">Đo: <b>${filled}/4</b> mục đã điền · ${Object.values(entries).flat().length} dòng · ${metrics.pausesAtStart} lần dừng bài · ${metrics.keystrokes} phím gõ</p>`));
+        footer.appendChild(el(`<p class="field__hint">Đo: <b>${filled}/3</b> mục đã điền · ${Object.values(entries).flat().length} dòng · ${metrics.pausesAtStart} lần dừng bài · ${metrics.keystrokes} phím gõ</p>`));
       }
-      stats();
+
+      loadSamples({ silent: true });
+      notify('Bắt đầu Template', 'Mỗi mục đã có 1 dòng mẫu. Gõ vào ô text Ý chính để hiện gợi ý từ slide — rồi Enter hoặc + Thêm. Xong bấm Xem tổng hợp.');
     }
   });
 
@@ -416,16 +527,13 @@
      Có công tắc: lịch cố định (không AI) ↔ AI chọn thời điểm.
      Kiểm chứng: rào cản thật là chất lượng ghi chú (Pain A)
      hay là động lực quay lại ôn (Pain B)?
-     Task/outcome: dùng chung JOB — nhánh này đánh vào vế sau,
-     "đến lúc cần ôn thì mở ra dùng lại được trong dưới 3 phút".
-     Chỉ số riêng đo ở footer: tỉ lệ mở lại ghi chú ở các mốc nhắc.
      ========================================================== */
   window.App.registerBranch({
     id: 'reminder',
     label: '3 · Nhắc ôn',
     railTitle: 'Nhắc ôn tập theo lịch',
-    task: JOB.task,
-    outcome: JOB.outcome,
+    task: 'Nhận nhắc đúng lúc và mở lại bản ghi chú đã lưu để ôn',
+    outcome: 'Mở lại ghi chú ở ≥ 2/3 mốc nhắc đầu tiên, mỗi lượt ôn dưới 3 phút',
     mount(root, api, footer) {
       const FREQUENCIES = {
         intensive: [1, 2, 5],

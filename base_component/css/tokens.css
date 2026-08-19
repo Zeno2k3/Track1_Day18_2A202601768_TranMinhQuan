@@ -14,9 +14,12 @@
   --orange-600: #EA580C;
   --orange-100: #FFEDD5;
   --red-600:    #DC2626;
+  --green-50:   #ECFDF5;
   --green-600:  #059669;
-  --amber-500:  #D97706;
-  --amber-600:  #B45309;
+  --green-800:  #065F46;
+  --amber-100:  #FEF3C7;
+  --amber-600:  #D97706;
+  --amber-800:  #92400E;
   --white:      #FFFFFF;
 
   /* --- Color: semantic --- */
@@ -35,18 +38,22 @@
   --color-accent-soft:  var(--orange-100);
   --color-destructive:  var(--red-600);
   --color-success:      var(--green-600);
-  --color-warning:      var(--amber-500);
+  --color-warning:      var(--amber-600);
   --color-ring:         var(--indigo-600);
 
-  /* Marker colors — mỗi loại dấu vết 1 cặp màu duy nhất, dùng cho
-     nút bắt + viền note + highlight trên slide + tick trên player.
-     *-line = màu đậm (viền/nút/tick), còn lại = nền nhạt bôi trên chữ. */
-  --mark-highlight:      #FDE68A;              /* Quan trọng — hổ phách */
-  --mark-highlight-line: var(--amber-600);
-  --mark-question:       var(--orange-100);    /* Chưa hiểu — cam */
-  --mark-question-line:  var(--color-accent);
-  --mark-note:           var(--indigo-100);    /* Ghi chú — chàm */
-  --mark-note-line:      var(--color-primary);
+  /* Marker colors — 3 loại ghi chú, Soft UI pastel + viền rõ */
+  --mark-highlight:         var(--amber-100);
+  --mark-highlight-border:  var(--amber-600);
+  --mark-highlight-fg:      var(--amber-800);
+  --mark-question:          var(--orange-100);
+  --mark-question-border:   var(--orange-600);
+  --mark-question-fg:       #9A3412;
+  --mark-note:              var(--indigo-50);
+  --mark-note-border:       var(--indigo-600);
+  --mark-note-fg:           var(--indigo-700);
+  --mark-highlight-line:    var(--mark-highlight-border);
+  --mark-question-line:     var(--mark-question-border);
+  --mark-note-line:         var(--mark-note-border);
 
   /* --- Spacing (density 5/10 — standard) --- */
   --space-1: 4px;

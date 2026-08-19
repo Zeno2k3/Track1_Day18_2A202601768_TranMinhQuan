@@ -236,5 +236,55 @@ window.FIXTURE = {
         ]
       }
     ]
-  }
+  },
+
+  /* Gợi ý từ khoá — dùng cho autocomplete ô nhập mẫu ghi chú */
+  suggestions: [
+    "Overfitting là bám nhiễu",
+    "Underfitting",
+    "Regularization L1/L2",
+    "Cross-validation",
+    "Bias cao",
+    "Variance cao",
+    "Early stopping",
+    "Dropout",
+    "Data augmentation",
+    "Learning curve",
+    "Ridge (L2) làm mượt trọng số",
+    "Lasso (L1) chọn đặc trưng",
+    "λ (lambda) là nút vặn",
+    "Train error vs validation error",
+    "k-fold (k = 5 hoặc 10)",
+    "Không chuẩn hoá trước khi chia",
+    "Tổng quát hoá",
+    "Chỉnh một thứ mỗi lần"
+  ],
+
+  /* Gói dữ liệu mẫu cho tester — bấm ⚡ để nạp, không đụng seedMarks */
+  samplePack: [
+    {
+      id: "sample-key",
+      type: "highlight",
+      slideId: "s2",
+      t: 430,
+      text: "Overfitting: mô hình bám cả nhiễu của tập train — train tốt, test tệ.",
+      note: "Ý chính: nhận biết qua khoảng cách train–validation nới rộng."
+    },
+    {
+      id: "sample-ask",
+      type: "question",
+      slideId: "s3",
+      t: 900,
+      text: "Thêm dữ liệu giúp giảm variance, không giúp giảm bias.",
+      note: "Chưa hiểu: vì sao thêm dữ liệu không giảm được bias?"
+    },
+    {
+      id: "sample-todo",
+      type: "note",
+      slideId: "s8",
+      t: 2630,
+      text: "Chạy Ridge với λ ∈ {0.01, 0.1, 1, 10}, vẽ validation curve, nộp trước Chủ nhật.",
+      note: "Việc cần làm: nộp bài tập Ridge trước Chủ nhật."
+    }
+  ]
 };

@@ -10,9 +10,10 @@
   /* ---------------- State dùng chung ---------------- */
   const state = {
     slideIndex: 0,
+    maxSlideIndex: 0,
     timeSec: 0,
     playing: false,
-    marks: F.seedMarks.map(m => ({ ...m })),
+    marks: F.seedMarks.map((m, i) => ({ ...m, createdAt: i + 1 })),
     activeBranch: null
   };
 
@@ -43,12 +44,18 @@
     void dom.slide.offsetWidth;
     dom.slide.classList.add('slide--enter');
     dom.slide.scrollTop = 0;
-    emit('slide:change', { slide: s, index: state.slideIndex });
+    touchProgress();
+    emit('slide:change', { slide: s, index: state.slideIndex, maxSlideIndex: state.maxSlideIndex });
+  }
+
+  function touchProgress() {
+    state.maxSlideIndex = Math.max(state.maxSlideIndex || 0, state.slideIndex);
   }
 
   function goToSlide(i) {
     state.slideIndex = Math.max(0, Math.min(F.slides.length - 1, i));
     state.timeSec = F.slides[state.slideIndex].startSec;
+    touchProgress();
     renderSlide();
     renderPlayer();
     renderTranscript();
@@ -57,7 +64,7 @@
   function seek(sec) {
     state.timeSec = Math.max(0, Math.min(F.lesson.durationSec, sec));
     const idx = F.slides.reduce((acc, s, i) => (state.timeSec >= s.startSec ? i : acc), 0);
-    if (idx !== state.slideIndex) { state.slideIndex = idx; renderSlide(); }
+    if (idx !== state.slideIndex) { state.slideIndex = idx; touchProgress(); renderSlide(); }
     renderPlayer();
     renderTranscript();
     emit('time:change', { t: state.timeSec });
@@ -110,10 +117,10 @@
       t: state.timeSec,
       text: '',
       note: '',
-      ...mark
+      ...mark,
+      createdAt: (mark && mark.createdAt) || Date.now()
     };
     state.marks.push(m);
-    state.marks.sort((a, b) => a.t - b.t);
     renderPlayer();
     emit('marks:change', { marks: state.marks, added: m });
     return m;
@@ -222,8 +229,8 @@
         <div class="main">
           <section class="stage">
             <article class="slide" id="slide" aria-live="polite"></article>
-
-            <div class="stack">
+            <div class="splitter splitter--y" id="splitY" role="separator" aria-orientation="horizontal" aria-label="Kéo để đổi chiều cao slide / transcript"></div>
+            <div class="stage__dock" id="stageDock">
               <div class="player">
                 <button class="btn btn--secondary btn--icon" type="button" id="prevBtn" aria-label="Slide trước">${icon('prev')}</button>
                 <button class="btn btn--icon" type="button" id="playBtn" aria-label="Phát">${icon('play')}</button>
@@ -237,7 +244,7 @@
                 <div class="player__slides" id="dots"></div>
               </div>
 
-              <div class="card card--pad">
+              <div class="card card--pad" style="flex:1;min-height:0;overflow:auto">
                 <div class="row row--between" style="margin-bottom:var(--space-2)">
                   <strong style="font-size:var(--text-sm)">Lời giảng (transcript)</strong>
                   <span class="badge badge--muted">Bôi đen để tạo dấu vết</span>
@@ -246,6 +253,8 @@
               </div>
             </div>
           </section>
+
+          <div class="splitter splitter--x" id="splitX" role="separator" aria-orientation="vertical" aria-label="Kéo để đổi độ rộng panel ghi chú"></div>
 
           <aside class="rail">
             <div class="rail__header">
@@ -261,6 +270,8 @@
     ['slide', 'time', 'track', 'playFill', 'ticks', 'dots', 'transcript', 'taskValue', 'outcomeValue',
      'railTitle', 'railBody', 'railFooter', 'branchSwitch', 'playBtn', 'prevBtn', 'nextBtn']
       .forEach(id => dom[id] = document.getElementById(id));
+
+    bindSplitters();
 
     dom.dots.innerHTML = F.slides.map((s, i) =>
       `<button class="player__dot" type="button" data-i="${i}" aria-label="Tới slide ${i + 1}: ${escapeHtml(s.title)}"></button>`).join('');
@@ -305,6 +316,45 @@
     renderPlayer();
     renderTranscript();
     activateBranch(location.hash.replace('#', '') || (branches[0] && branches[0].id));
+  }
+
+  function bindSplitters() {
+    const root = document.documentElement;
+    const splitX = document.getElementById('splitX');
+    const splitY = document.getElementById('splitY');
+    const stage = document.querySelector('.stage');
+    const main = document.querySelector('.main');
+
+    function drag(handle, onMove) {
+      handle.addEventListener('pointerdown', e => {
+        e.preventDefault();
+        handle.classList.add('is-dragging');
+        handle.setPointerCapture(e.pointerId);
+      });
+      handle.addEventListener('pointermove', ev => {
+        if (!handle.hasPointerCapture(ev.pointerId)) return;
+        onMove(ev);
+      });
+      handle.addEventListener('pointerup', ev => {
+        handle.classList.remove('is-dragging');
+        if (handle.hasPointerCapture(ev.pointerId)) handle.releasePointerCapture(ev.pointerId);
+      });
+    }
+
+    if (splitX && main) {
+      drag(splitX, ev => {
+        const r = main.getBoundingClientRect();
+        const w = Math.round(r.right - ev.clientX);
+        root.style.setProperty('--rail-width', Math.max(280, Math.min(640, w)) + 'px');
+      });
+    }
+    if (splitY && stage) {
+      drag(splitY, ev => {
+        const r = stage.getBoundingClientRect();
+        const h = Math.round(r.bottom - ev.clientY);
+        root.style.setProperty('--stage-dock', Math.max(140, Math.min(r.height - 160, h)) + 'px');
+      });
+    }
   }
 
   window.App = { registerBranch, mount, api };
